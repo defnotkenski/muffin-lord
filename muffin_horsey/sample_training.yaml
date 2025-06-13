@@ -1,0 +1,80 @@
+# Race-level metadata. (15 features)
+race_track: Churchill Downs
+race_date: 2025-06-05
+race_number: 1
+race_type: Claiming
+distance_furlongs: 9.0
+track_condition: Fast
+purse: 36000
+field_size: 9
+surface: Dirt
+class_rating: 88
+track_conditions: FT
+weather: Cloudy
+runup_distance: 50
+rail_distance: 20
+sealed: false
+
+# Horse-level metadata. (4 features)
+rank_in_odds: 0
+dollar_odds: 0.76
+days_since_last_race: 27
+trainer_win_pct_30d: 0.60
+
+# Lag 01 race-level metadata. (15 features)
+recent_0_race_track: Churchill Downs
+recent_0_race_date: 2025-06-05
+recent_0_race_number: 1
+recent_0_race_type: Claiming
+recent_0_distance_furlongs: 9.0
+recent_0_track_condition: Fast
+recent_0_purse: 36000
+recent_0_field_size: 9
+recent_0_surface: Dirt
+recent_0_class_rating: 88
+recent_0_track_conditions: FT
+recent_0_weather: Cloudy
+recent_0_runup_distance: 50
+recent_0_rail_distance: 20
+recent_0_sealed: false
+
+# Lag 01 horse-level metadata. (4 features)
+recent_0_rank_in_odds: 0
+recent_0_dollar_odds: 0.76
+recent_0_days_since_last_race: 27
+recent_0_trainer_win_pct_30d: 0.62
+
+# Lag 01 results. (13 features)
+recent_0_race_speed_vs_par: 12 # Final time of winner - par time (in seconds or lengths).
+recent_0_fav_speed_vs_par: 19 # Time of favorite - par time.
+recent_0_fav_time_vs_winner: 21 # Direct matchup: how the favorite did compared to the horse that actually won. Time of favorite - time of winner.
+recent_0_first_start_position: 3
+recent_0_first_call_position: 5
+recent_0_first_call_lengths: 4.0
+recent_0_stretch_position: 7
+recent_0_stretch_lengths: 6.0
+recent_0_final_position: 6
+recent_0_final_lengths: 6.3
+recent_0_speed_rating: 78 # Straightforward. Higher is better.
+recent_0_speed_rating_vs_field: 23 # Shows whether the horse overperformed or underperformed relative to peers. Horse_rating - avg_field_rating.
+recent_0_speed_rating_vs_winner: 12 # How close the favorite was to the top performance. Speed_rating - winner_speed_rating.
+
+# Race-level, horse-level, and results for lag 02 will appear here.
+# {...}
+
+# Other horse 01: current horse-level metadata. (5 features)
+other_X_present: 1,
+other_X_rank_in_odds: 1
+other_X_dollar_odds: 2.21
+other_X_days_since_last_race: 23
+other_X_trainer_win_pct_30d: 0.62
+
+# Other horse 01: compressed race-level metadata, horse-level metadata, and results lag 01. (5 features)
+other_X_recent_X_dollar_odds: 1.23
+other_X_recent_X_trainer_win_pct_30d: 0.62
+other_X_recent_X_speed_rating: 89
+other_X_recent_X_speed_rating_vs_field: 12
+other_X_recent_X_final_position: 5
+
+# Race-level, horse-level, and results for lag 02-10 will appear here.
+# {...}
