@@ -2,11 +2,10 @@ import xml.etree.ElementTree as ET
 import polars
 import json
 from datetime import datetime
+from muffin_horsey.feature_processor import FeatureProcessor
 
 
-def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f"Hi, {name}")  # Press ⌘F8 to toggle the breakpoint.
+def merge_xml() -> polars.DataFrame:
 
     with open("tags_selector.json", "r") as r:
         tags_selector = json.load(r)
@@ -68,11 +67,11 @@ def print_hi(name):
     print(f"Num of horses: {horse_count}")
     _xml_polars = polars.from_dicts(polars_dict)
 
-    return
+    return _xml_polars
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == "__main__":
-    print_hi("Kenny")
+    merged_df = merge_xml()
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    feature_processor = FeatureProcessor(df=merged_df)
+    feature_processor.extract_features()

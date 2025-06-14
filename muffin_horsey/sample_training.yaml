@@ -54,8 +54,7 @@ recent_0_speed_rating_vs_winner: 12 # How close the favorite was to the top perf
 # Favored horse 01/05: lag 02/02 will appear here.
 # {...}
 
-# Other horse 02/05: current horse-level metadata. (5 features)
-other_X_present: 1,
+# Other horse 02/05: current horse-level metadata. (4 features)
 other_X_rank_in_odds: 1
 other_X_dollar_odds: 2.21
 other_X_days_since_last_race: 23
