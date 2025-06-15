@@ -3,17 +3,18 @@ import polars
 import json
 from datetime import datetime
 from muffin_horsey.feature_processor import FeatureProcessor
+from pathlib import Path
 
 
-def merge_xml() -> polars.DataFrame:
-
+def process_xml(xml_path: Path) -> list[dict]:
     with open("tags_selector.json", "r") as r:
         tags_selector = json.load(r)
 
     horse_count: int = 0
     polars_dict: list[dict] = []
 
-    tree = ET.parse("datasets/2025_06/GP20250601TCH.xml")
+    # tree = ET.parse("datasets/2025_06/GP20250601TCH.xml")
+    tree = ET.parse(xml_path)
     root = tree.getroot()
 
     for race in root.findall("RACE"):
@@ -64,10 +65,21 @@ def merge_xml() -> polars.DataFrame:
             horse_count += 1
             polars_dict.append({"race_date": race_date, **parsed_data})
 
-    print(f"Num of horses: {horse_count}")
-    _xml_polars = polars.from_dicts(polars_dict)
+    # print(f"Num of horses: {horse_count}")
+    # _xml_polars = polars.from_dicts(polars_dict)
 
-    return _xml_polars
+    return polars_dict
+
+
+def merge_xml() -> polars.DataFrame:
+    all_data = []
+    xml_files = Path.cwd().joinpath("datasets").rglob("*.xml")
+
+    for xml in xml_files:
+        file_data = process_xml(xml_path=xml)
+        all_data.extend(file_data)
+
+    return polars.from_dicts(all_data).sort(["race_date", "track_code", polars.col("race_number").cast(polars.Int64)])
 
 
 if __name__ == "__main__":

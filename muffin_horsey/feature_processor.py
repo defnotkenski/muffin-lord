@@ -12,11 +12,7 @@ class FeatureProcessor:
 
         # Create new features based on existing columns.
         # Add distance_furlongs column.
-        feature_df = feature_df.with_columns(
-            pl.when(pl.col("distance_unit") == "F")
-            .then(pl.col("distance").cast(pl.Float64) / 660)
-            .alias("distance_furlongs")
-        )
+        feature_df = feature_df.with_columns((pl.col("distance").cast(pl.Float64) / 100).alias("distance_furlongs"))
 
         # Add field_size column.
         feature_df = feature_df.with_columns(
@@ -24,7 +20,9 @@ class FeatureProcessor:
         )
 
         # Add rank_in_odds column.
-        feature_df = feature_df.with_columns(pl.col("dollar_odds").cast(pl.Float64))
+        feature_df = feature_df.with_columns(
+            [pl.col("dollar_odds").cast(pl.Float64), pl.col("race_number").cast(pl.Int64)]
+        )
 
         feature_df = feature_df.with_columns(
             pl.int_range(pl.len())
