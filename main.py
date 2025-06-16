@@ -42,7 +42,12 @@ def process_xml(xml_path: Path) -> list[dict]:
             parsed_data["race_number"] = race_number
 
             for key, value in race_tags.items():
-                parsed_data[key] = race.find(value).text
+                race_tag_value = race.find(value)
+
+                if race_tag_value is None:
+                    print(f"None for {key}: {value}")
+
+                parsed_data[key] = race_tag_value.text if race_tag_value is not None else None
 
             # ===== Get ENTRY data. =====
 
