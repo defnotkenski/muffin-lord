@@ -4,13 +4,13 @@ import json
 from datetime import datetime
 from muffin_horsey.feature_processor import FeatureProcessor
 from pathlib import Path
+from schema import COLUMN_TYPES
 
 
 def process_xml(xml_path: Path) -> list[dict]:
     with open("tags_selector.json", "r") as r:
         tags_selector = json.load(r)
 
-    horse_count: int = 0
     polars_dict: list[dict] = []
 
     # tree = ET.parse("datasets/2025_06/GP20250601TCH.xml")
@@ -43,10 +43,6 @@ def process_xml(xml_path: Path) -> list[dict]:
 
             for key, value in race_tags.items():
                 race_tag_value = race.find(value)
-
-                if race_tag_value is None:
-                    print(f"None for {key}: {value}")
-
                 parsed_data[key] = race_tag_value.text if race_tag_value is not None else None
 
             # ===== Get ENTRY data. =====
@@ -64,27 +60,51 @@ def process_xml(xml_path: Path) -> list[dict]:
 
             parsed_data["jockey_full_name"] = jockey_full_name
 
-            del parsed_data["jockey_first_name"]
-            del parsed_data["jockey_last_name"]
-
-            horse_count += 1
             polars_dict.append({"race_date": race_date, **parsed_data})
 
-    # print(f"Num of horses: {horse_count}")
-    # _xml_polars = polars.from_dicts(polars_dict)
-
     return polars_dict
+
+
+def _cleanup_dataframe(base_polars_df: polars.DataFrame) -> polars.DataFrame:
+    # Convert all instances of " " to None across all columns.
+    cols_to_replace = ["pace_call_1", "pace_call_2", "trainer_first_name", "owner_full_name"]
+
+    base_polars_df = base_polars_df.with_columns(
+        [
+            polars.when(polars.col(col) == " ").then(polars.lit(None)).otherwise(polars.col(col)).alias(col)
+            for col in cols_to_replace
+        ]
+    )
+
+    # Check for single space " " in all columns.
+    _df_check_1_post = base_polars_df.select([(polars.col("*").exclude("race_date", "last_pp_race_date") == " ").sum()])
+
+    return base_polars_df
 
 
 def merge_xml() -> polars.DataFrame:
     all_data = []
     xml_files = Path.cwd().joinpath("datasets").rglob("*.xml")
 
+    # Iterate through every XML file and parse.
     for xml in xml_files:
         file_data = process_xml(xml_path=xml)
         all_data.extend(file_data)
 
-    return polars.from_dicts(all_data).sort(["race_date", "track_code", polars.col("race_number").cast(polars.Int64)])
+    # Create polars dataframe from dict and apply appropriate sorting.
+    polars_df = polars.from_dicts(all_data)
+
+    # Cleanup outlier values.
+    polars_df = _cleanup_dataframe(base_polars_df=polars_df)
+
+    # Cast columns to appropriate dtypes.
+    polars_df = polars_df.cast(COLUMN_TYPES)
+    polars_df = polars_df.with_columns(polars.col("last_pp_race_date").str.to_datetime())
+
+    # Apply appropriate sorting before sending it off.
+    polars_df = polars_df.sort(["race_date", "track_code", "race_number"])
+
+    return polars_df
 
 
 if __name__ == "__main__":

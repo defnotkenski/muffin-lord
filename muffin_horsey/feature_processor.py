@@ -6,10 +6,9 @@ class FeatureProcessor:
         self.base_df = df
         self.processed_df = None
 
-    def _process_lag_races(self, feature_df: pl.DataFrame) -> pl.DataFrame:
+    @staticmethod
+    def _process_lag_races(feature_df: pl.DataFrame) -> pl.DataFrame:
         # Find horse's last race based on track code and race number.
-        feature_df = feature_df.cast({"last_pp_race_number": pl.Int64})
-
         feature_df = feature_df.with_columns(pl.col("last_pp_track_code").alias("track_code_recent_0"))
 
         feature_df = feature_df.join(
@@ -58,18 +57,12 @@ class FeatureProcessor:
 
         # Add rank_in_odds column.
         feature_df = feature_df.with_columns(
-            [pl.col("dollar_odds").cast(pl.Float64), pl.col("race_number").cast(pl.Int64)]
-        )
-
-        feature_df = feature_df.with_columns(
             pl.int_range(pl.len())
             .over(["race_date", "track_code", "race_number"], order_by="dollar_odds")
             .alias("rank_in_odds")
         ).sort(["race_date", "track_code", "race_number", "dollar_odds"])
 
         # Add days_since_last_race column.
-        feature_df = feature_df.with_columns(pl.col("last_pp_race_date").str.to_datetime())
-
         feature_df = feature_df.with_columns(
             (pl.col("race_date") - pl.col("last_pp_race_date")).dt.total_days().alias("days_since_last_race")
         )
@@ -84,7 +77,7 @@ class FeatureProcessor:
         feature_df = feature_df.with_columns(
             (
                 pl.col("official_final_position")
-                .is_in(["1", "2", "3"])
+                .is_in([1, 2, 3])
                 .cum_sum()
                 .over("trainer_full_name", order_by=["race_date", "track_code", "race_number"])
                 .cast(pl.Int64)
@@ -111,8 +104,6 @@ class FeatureProcessor:
 
         # Results-derived feature calculations.
         # Calculate race_speed_vs_par.
-        feature_df = feature_df.cast({"win_time": pl.Float64, "par_time": pl.Float64})
-
         feature_df = feature_df.with_columns(
             pl.when(pl.col("par_time") != 0.00)
             .then(pl.col("win_time") - pl.col("par_time"))
@@ -120,8 +111,44 @@ class FeatureProcessor:
             .alias("race_speed_vs_par")
         )
 
-        # Calculate fav_speed_vs_par.
-        # length_seconds = 0.2
+        # Calculate horse_speed_vs_par.
+        length_seconds = 0.2
+
+        feature_df = feature_df.with_columns(
+            (pl.col("point_of_call_final_lengths") * length_seconds + pl.col("win_time")).alias("horse_finish_time")
+        )
+
+        feature_df = feature_df.with_columns(
+            (pl.col("horse_finish_time") - pl.col("par_time")).alias("horse_speed_vs_par")
+        )
+
+        # Calculate the horse_time_vs_winner.
+        feature_df = feature_df.with_columns(
+            (pl.col("horse_finish_time") - pl.col("win_time")).alias("horse_time_vs_winner")
+        )
+
+        # Calculate the speed_rating_vs_field.
+        feature_df = feature_df.with_columns(
+            ((pl.col("speed_rating").sum() - pl.col("speed_rating")) / (pl.len() - 1))
+            .over(["race_date", "track_code", "race_number"])
+            .alias("field_avg_speed_rating")
+        )
+
+        feature_df = feature_df.with_columns(
+            (pl.col("speed_rating") - pl.col("field_avg_speed_rating")).alias("speed_rating_vs_field")
+        )
+
+        # Calculate the speed_rating_vs_winner.
+        feature_df = feature_df.with_columns(
+            pl.col("speed_rating")
+            .get(pl.col("official_final_position").arg_min())
+            .over(["race_date", "track_code", "race_number"])
+            .alias("speed_rating_winner")
+        )
+
+        feature_df = feature_df.with_columns(
+            (pl.col("speed_rating") - pl.col("speed_rating_winner")).alias("speed_rating_vs_winner")
+        )
 
         # Create lag races for horses.
         feature_df = self._process_lag_races(feature_df=feature_df)
