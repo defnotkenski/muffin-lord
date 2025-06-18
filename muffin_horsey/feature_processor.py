@@ -32,6 +32,19 @@ class FeatureProcessor:
                     "dollar_odds",
                     "days_since_last_race",
                     "trainer_win_pct",
+                    "race_speed_vs_par",
+                    "horse_speed_vs_par",
+                    "horse_time_vs_winner",
+                    "start_position",
+                    "point_of_call_1_position",
+                    "point_of_call_1_lengths",
+                    "point_of_call_5_position",
+                    "point_of_call_5_lengths",
+                    "point_of_call_final_position",
+                    "point_of_call_final_lengths",
+                    "speed_rating",
+                    "speed_rating_vs_field",
+                    "speed_rating_vs_winner",
                 ]
             ),
             left_on=["last_pp_race_date", "last_pp_track_code", "last_pp_race_number", "horse_name"],
@@ -40,7 +53,120 @@ class FeatureProcessor:
             suffix="_recent_0",
         )
 
+        # Rename lag columns with approprate prefix.
+        feature_df = feature_df.rename(
+            {col: f"recent_0_{col.replace("_recent_0", "")}" for col in feature_df.columns if col.endswith("_recent_0")}
+        )
+
         return feature_df
+
+    @staticmethod
+    def _process_opponents(base_df: pl.DataFrame) -> pl.DataFrame:
+        # Generate the current race features for the top 4 opponent horses. (ranked by dollar_odds)
+        race_data = (
+            base_df.group_by(["race_date", "track_code", "race_number"])
+            .agg(
+                [
+                    pl.col("horse_name").sort_by("rank_in_odds").alias("all_horse_name"),
+                    pl.col("dollar_odds").sort_by("rank_in_odds").alias("all_dollar_odds"),
+                    pl.col("rank_in_odds").sort_by("rank_in_odds").alias("all_rank_in_odds"),
+                    pl.col("trainer_win_pct").sort_by("rank_in_odds").alias("all_trainer_win_pct"),
+                    pl.col("days_since_last_race").sort_by("rank_in_odds").alias("all_days_since_last_race"),
+                ]
+            )
+            .sort(["race_date", "track_code", "race_number"])
+        )
+
+        base_df = base_df.join(race_data, on=["race_date", "track_code", "race_number"])
+
+        # Create offset indices in order to get true opponents without current horse.
+        base_df = base_df.with_columns(
+            pl.when(pl.col("rank_in_odds") == 1)
+            .then(pl.lit([1, 2, 3, 4]))
+            .when(pl.col("rank_in_odds") == 2)
+            .then(pl.lit([0, 2, 3, 4]))
+            .when(pl.col("rank_in_odds") == 3)
+            .then(pl.lit([0, 1, 3, 4]))
+            .when(pl.col("rank_in_odds") == 4)
+            .then(pl.lit([0, 1, 2, 4]))
+            .otherwise(pl.lit([0, 1, 2, 3]))
+            .alias("opponent_indices")
+        )
+
+        # Use the offset opponent indices to grab the appropriate values for each col.
+        # Create opp_1_dollar_odds.
+        base_df = base_df.with_columns(
+            [
+                pl.col("all_dollar_odds")
+                .list.get(pl.col("opponent_indices").list.get(0), null_on_oob=True)
+                .alias("opp_1_dollar_odds"),
+                pl.col("all_dollar_odds")
+                .list.get(pl.col("opponent_indices").list.get(1), null_on_oob=True)
+                .alias("opp_2_dollar_odds"),
+                pl.col("all_dollar_odds")
+                .list.get(pl.col("opponent_indices").list.get(2), null_on_oob=True)
+                .alias("opp_3_dollar_odds"),
+                pl.col("all_dollar_odds")
+                .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
+                .alias("opp_4_dollar_odds"),
+            ]
+        )
+
+        # Create opp_1_rank_in_odds.
+        base_df = base_df.with_columns(
+            [
+                pl.col("all_rank_in_odds")
+                .list.get(pl.col("opponent_indices").list.get(0), null_on_oob=True)
+                .alias("opp_1_rank_in_odds"),
+                pl.col("all_rank_in_odds")
+                .list.get(pl.col("opponent_indices").list.get(1), null_on_oob=True)
+                .alias("opp_2_rank_in_odds"),
+                pl.col("all_rank_in_odds")
+                .list.get(pl.col("opponent_indices").list.get(2), null_on_oob=True)
+                .alias("opp_3_rank_in_odds"),
+                pl.col("all_rank_in_odds")
+                .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
+                .alias("opp_4_rank_in_odds"),
+            ]
+        )
+
+        # Create opp_1_days_since_last_race.
+        base_df = base_df.with_columns(
+            [
+                pl.col("all_days_since_last_race")
+                .list.get(pl.col("opponent_indices").list.get(0), null_on_oob=True)
+                .alias("opp_1_days_since_last_race"),
+                pl.col("all_days_since_last_race")
+                .list.get(pl.col("opponent_indices").list.get(1), null_on_oob=True)
+                .alias("opp_2_days_since_last_race"),
+                pl.col("all_days_since_last_race")
+                .list.get(pl.col("opponent_indices").list.get(2), null_on_oob=True)
+                .alias("opp_3_days_since_last_race"),
+                pl.col("all_days_since_last_race")
+                .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
+                .alias("opp_4_days_since_last_race"),
+            ]
+        )
+
+        # Create opp_1_trainer_win_pct.
+        base_df = base_df.with_columns(
+            [
+                pl.col("all_trainer_win_pct")
+                .list.get(pl.col("opponent_indices").list.get(0), null_on_oob=True)
+                .alias("opp_1_trainer_win_pct"),
+                pl.col("all_trainer_win_pct")
+                .list.get(pl.col("opponent_indices").list.get(1), null_on_oob=True)
+                .alias("opp_2_trainer_win_pct"),
+                pl.col("all_trainer_win_pct")
+                .list.get(pl.col("opponent_indices").list.get(2), null_on_oob=True)
+                .alias("opp_3_trainer_win_pct"),
+                pl.col("all_trainer_win_pct")
+                .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
+                .alias("opp_4_trainer_win_pct"),
+            ]
+        )
+
+        return base_df
 
     def extract_features(self) -> None:
         # Set the base or working dataframe.
@@ -57,10 +183,11 @@ class FeatureProcessor:
 
         # Add rank_in_odds column.
         feature_df = feature_df.with_columns(
-            pl.int_range(pl.len())
-            .over(["race_date", "track_code", "race_number"], order_by="dollar_odds")
+            pl.col("dollar_odds")
+            .rank(method="ordinal")
+            .over(["race_date", "track_code", "race_number"])
             .alias("rank_in_odds")
-        ).sort(["race_date", "track_code", "race_number", "dollar_odds"])
+        )
 
         # Add days_since_last_race column.
         feature_df = feature_df.with_columns(
@@ -152,6 +279,9 @@ class FeatureProcessor:
 
         # Create lag races for horses.
         feature_df = self._process_lag_races(feature_df=feature_df)
+
+        # Process opponent horses.
+        feature_df = self._process_opponents(base_df=feature_df)
 
         # Select columns needed for training.
         feature_df = feature_df.select(

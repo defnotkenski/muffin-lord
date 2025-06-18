@@ -102,7 +102,7 @@ def merge_xml() -> polars.DataFrame:
     polars_df = polars_df.with_columns(polars.col("last_pp_race_date").str.to_datetime())
 
     # Apply appropriate sorting before sending it off.
-    polars_df = polars_df.sort(["race_date", "track_code", "race_number"])
+    polars_df = polars_df.sort(["race_date", "track_code", "race_number", "dollar_odds"])
 
     return polars_df
 
