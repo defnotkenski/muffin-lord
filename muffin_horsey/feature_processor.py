@@ -72,6 +72,9 @@ class FeatureProcessor:
                     pl.col("rank_in_odds").sort_by("rank_in_odds").alias("all_rank_in_odds"),
                     pl.col("trainer_win_pct").sort_by("rank_in_odds").alias("all_trainer_win_pct"),
                     pl.col("days_since_last_race").sort_by("rank_in_odds").alias("all_days_since_last_race"),
+                    pl.col("last_pp_race_date").sort_by("rank_in_odds").alias("all_last_pp_race_date"),
+                    pl.col("last_pp_track_code").sort_by("rank_in_odds").alias("all_last_pp_track_code"),
+                    pl.col("last_pp_race_number").sort_by("rank_in_odds").alias("all_last_pp_race_number"),
                 ]
             )
             .sort(["race_date", "track_code", "race_number"])
@@ -94,7 +97,7 @@ class FeatureProcessor:
         )
 
         # Use the offset opponent indices to grab the appropriate values for each col.
-        # Create opp_1_dollar_odds.
+        # Create opp_X_dollar_odds.
         base_df = base_df.with_columns(
             [
                 pl.col("all_dollar_odds")
@@ -112,7 +115,7 @@ class FeatureProcessor:
             ]
         )
 
-        # Create opp_1_rank_in_odds.
+        # Create opp_X_rank_in_odds.
         base_df = base_df.with_columns(
             [
                 pl.col("all_rank_in_odds")
@@ -130,7 +133,7 @@ class FeatureProcessor:
             ]
         )
 
-        # Create opp_1_days_since_last_race.
+        # Create opp_X_days_since_last_race.
         base_df = base_df.with_columns(
             [
                 pl.col("all_days_since_last_race")
@@ -148,7 +151,7 @@ class FeatureProcessor:
             ]
         )
 
-        # Create opp_1_trainer_win_pct.
+        # Create opp_X_trainer_win_pct.
         base_df = base_df.with_columns(
             [
                 pl.col("all_trainer_win_pct")
@@ -164,6 +167,71 @@ class FeatureProcessor:
                 .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
                 .alias("opp_4_trainer_win_pct"),
             ]
+        )
+
+        # Create opp_X_horse_name.
+        base_df = base_df.with_columns(
+            [
+                pl.col("all_horse_name")
+                .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
+                .alias(f"opp_{idx + 1}_horse_name")
+                for idx in range(4)
+            ]
+        )
+
+        # Create opp_X_last_pp_race_date.
+        base_df = base_df.with_columns(
+            [
+                pl.col("all_last_pp_race_date")
+                .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
+                .alias(f"opp_{idx+1}_last_pp_race_date")
+                for idx in range(4)
+            ]
+        )
+
+        # Create opp_X_last_pp_track_code.
+        base_df = base_df.with_columns(
+            [
+                pl.col("all_last_pp_track_code")
+                .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
+                .alias(f"opp_{idx + 1}_last_pp_track_code")
+                for idx in range(4)
+            ]
+        )
+
+        # Create opp_X_last_pp_race_number.
+        base_df = base_df.with_columns(
+            [
+                pl.col("all_last_pp_race_number")
+                .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
+                .alias(f"opp_{idx + 1}_last_pp_race_number")
+                for idx in range(4)
+            ]
+        )
+
+        # Join opponent 1's last race data.
+        base_df = base_df.join(
+            base_df.select(
+                [
+                    "race_date",
+                    "track_code",
+                    "race_number",
+                    "horse_name",
+                    "speed_rating",
+                    "trainer_win_pct",
+                    "dollar_odds",
+                    "official_final_position",
+                ]
+            ),
+            left_on=[
+                "opp_1_last_pp_race_date",
+                "opp_1_last_pp_track_code",
+                "opp_1_last_pp_race_number",
+                "opp_1_horse_name",
+            ],
+            right_on=["race_date", "track_code", "race_number", "horse_name"],
+            how="left",
+            suffix="_opp_1_last",
         )
 
         return base_df
