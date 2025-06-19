@@ -110,5 +110,5 @@ def merge_xml() -> polars.DataFrame:
 if __name__ == "__main__":
     merged_df = merge_xml()
 
-    feature_processor = FeatureProcessor(df=merged_df)
-    feature_processor.extract_features()
+    feature_processor = FeatureProcessor(df=merged_df, target_type="place")
+    feature_processor.get_dataframe()

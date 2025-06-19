@@ -1,10 +1,12 @@
+from typing import Literal
 import polars as pl
 from muffin_horsey.feature_generator import generate_train_features
 
 
 class FeatureProcessor:
-    def __init__(self, df: pl.DataFrame):
+    def __init__(self, df: pl.DataFrame, target_type: Literal["win", "show", "place"]):
         self.base_df = df
+        self.target_type = target_type
         self.processed_df = None
 
     @staticmethod
@@ -255,7 +257,7 @@ class FeatureProcessor:
 
         return base_df
 
-    def extract_features(self) -> pl.DataFrame:
+    def _extract_features(self) -> bool:
         # Set the base or working dataframe.
         feature_df = self.base_df
 
@@ -370,8 +372,42 @@ class FeatureProcessor:
         # Process opponent horses.
         feature_df = self._process_opponents(base_df=feature_df)
 
+        # Generate target columns.
+        if self.target_type == "win":
+            feature_df = feature_df.with_columns(
+                (pl.col("official_final_position") == 1).cast(pl.Int64).alias("target")
+            )
+        elif self.target_type == "show":
+            feature_df = feature_df.with_columns(
+                (pl.col("official_final_position") <= 2).cast(pl.Int64).alias("target")
+            )
+        else:
+            feature_df = feature_df.with_columns(
+                (pl.col("official_final_position") <= 3).cast(pl.Int64).alias("target")
+            )
+
         # Select columns needed for training.
         all_features = generate_train_features(lag_count=1, other_count=4)
         feature_df = feature_df.select(all_features)
 
-        return feature_df
+        self.processed_df = feature_df
+
+        return True
+
+    def _clean_up(self) -> bool:
+        base_df: pl.DataFrame = self.processed_df
+
+        _null_count = base_df.null_count()
+
+        return True
+
+    def get_dataframe(self) -> pl.DataFrame:
+        """This function serves as the orchestrator of various methods in order to output a train-ready dataframe."""
+
+        # Extract features from data.
+        self._extract_features()
+
+        # Clean up data to prepare for transformer.
+        self._clean_up()
+
+        return self.processed_df

@@ -45,6 +45,7 @@ def generate_train_features(lag_count: int, other_count: int) -> list:
         *master_current_horse_lags,
         *master_other_horse,
         *master_other_horse_lags,
+        f"target",
     ]
 
     return master_features
