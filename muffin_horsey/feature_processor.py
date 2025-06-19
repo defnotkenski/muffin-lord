@@ -209,30 +209,48 @@ class FeatureProcessor:
             ]
         )
 
-        # Join opponent 1's last race data.
-        base_df = base_df.join(
-            base_df.select(
-                [
-                    "race_date",
-                    "track_code",
-                    "race_number",
-                    "horse_name",
-                    "speed_rating",
-                    "trainer_win_pct",
-                    "dollar_odds",
-                    "official_final_position",
-                ]
-            ),
-            left_on=[
-                "opp_1_last_pp_race_date",
-                "opp_1_last_pp_track_code",
-                "opp_1_last_pp_race_number",
-                "opp_1_horse_name",
-            ],
-            right_on=["race_date", "track_code", "race_number", "horse_name"],
-            how="left",
-            suffix="_opp_1_last",
-        )
+        # Join opponent's last race data.
+        for i in range(4):
+            base_df = base_df.join(
+                base_df.select(
+                    [
+                        "race_date",
+                        "track_code",
+                        "race_number",
+                        "horse_name",
+                        "course_surface",
+                        "distance_furlongs",
+                        "class_rating",
+                        "dollar_odds",
+                        "trainer_win_pct",
+                        "race_speed_vs_par",
+                        "horse_speed_vs_par",
+                        "speed_rating",
+                        "speed_rating_vs_field",
+                        "speed_rating_vs_winner",
+                        "start_position",
+                        "official_final_position",
+                    ]
+                ),
+                left_on=[
+                    f"opp_{i+1}_last_pp_race_date",
+                    f"opp_{i+1}_last_pp_track_code",
+                    f"opp_{i+1}_last_pp_race_number",
+                    f"opp_{i+1}_horse_name",
+                ],
+                right_on=["race_date", "track_code", "race_number", "horse_name"],
+                how="left",
+                suffix=f"_opp_{i+1}_recent_0",
+            )
+
+            # Rename cols with the appropriate prefix.
+            base_df = base_df.rename(
+                {
+                    col: f"opp_{i+1}_recent_0_{col.replace(f"_opp_{i+1}_recent_0", "")}"
+                    for col in base_df.columns
+                    if col.endswith(f"_opp_{i+1}_recent_0")
+                }
+            )
 
         return base_df
 
