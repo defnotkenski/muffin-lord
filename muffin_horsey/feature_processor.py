@@ -1,4 +1,5 @@
 import polars as pl
+from muffin_horsey.feature_generator import generate_train_features
 
 
 class FeatureProcessor:
@@ -254,7 +255,7 @@ class FeatureProcessor:
 
         return base_df
 
-    def extract_features(self) -> None:
+    def extract_features(self) -> pl.DataFrame:
         # Set the base or working dataframe.
         feature_df = self.base_df
 
@@ -370,25 +371,7 @@ class FeatureProcessor:
         feature_df = self._process_opponents(base_df=feature_df)
 
         # Select columns needed for training.
-        feature_df = feature_df.select(
-            [
-                "track_code",
-                "horse_name",
-                "race_type",
-                "race_purse",
-                "distance_furlongs",
-                "field_size",
-                "course_surface",
-                "class_rating",
-                "track_conditions",
-                "runup_distance",
-                "rail_distance",
-                "sealed",
-                "dollar_odds",
-                "rank_in_odds",
-                "days_since_last_race",
-                "trainer_win_pct",
-            ]
-        )
+        all_features = generate_train_features(lag_count=1, other_count=4)
+        feature_df = feature_df.select(all_features)
 
-        return
+        return feature_df

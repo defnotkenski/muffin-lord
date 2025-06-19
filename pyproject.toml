@@ -7,4 +7,5 @@ dependencies = [
     "black>=25.1.0",
     "playwright>=1.52.0",
     "polars>=1.30.0",
+    "pyyaml>=6.0.2",
 ]
