@@ -1,14 +1,22 @@
 from typing import Literal
 import polars as pl
 from muffin_horsey.feature_generator import generate_train_features
+from typing import NamedTuple
+
+
+class DataFrameInfo(NamedTuple):
+    df: pl.DataFrame
+    continuous_cols: list[str]
+    categorical_cols: list[str]
+    target_cols: list[str]
 
 
 class FeatureProcessor:
     def __init__(self, df: pl.DataFrame, target_type: Literal["win", "show", "place"]):
-        self.base_df = df
-        self.processed_df = None
+        self.base_df: pl.DataFrame = df
+        self.processed_df: pl.DataFrame | None = None
 
-        self.target_type = target_type
+        self.target_type: str = target_type
 
         all_features = generate_train_features(lag_count=1, other_count=4)
         self.train_features = all_features
@@ -401,7 +409,7 @@ class FeatureProcessor:
         base_df: pl.DataFrame = self.processed_df
 
         # Add indicator columns for cols susceptible to missing data.
-        base_df = base_df.with_columns(pl.all().is_null().cast(pl.Int64).name.suffix("_is_null"))
+        base_df = base_df.with_columns(pl.all().exclude("target").is_null().cast(pl.Int64).name.suffix("_is_null"))
 
         # Fill nulls with a sentinel value like -999. Do not go bigger in order to prevent gradient issues.
         base_df = base_df.with_columns(pl.col(pl.selectors.NUMERIC_DTYPES).fill_null(-999))
@@ -413,7 +421,7 @@ class FeatureProcessor:
 
         return True
 
-    def get_dataframe(self) -> pl.DataFrame:
+    def get_dataframe(self) -> DataFrameInfo:
         """This function serves as the orchestrator of various methods in order to output a train-ready dataframe."""
 
         # Extract features from data.
@@ -423,5 +431,10 @@ class FeatureProcessor:
         self._handle_missing_values()
 
         # Organize into categorical, continuous, and target cols for model.
+        continuous_cols = self.processed_df.select(pl.selectors.numeric().exclude("target")).columns
+        string_cols = self.processed_df.select(pl.selectors.string()).columns
+        target_cols = ["target"]
 
-        return self.processed_df
+        return DataFrameInfo(
+            df=self.processed_df, continuous_cols=continuous_cols, categorical_cols=string_cols, target_cols=target_cols
+        )
