@@ -394,10 +394,20 @@ class FeatureProcessor:
 
         return True
 
-    def _clean_up(self) -> bool:
+    def _handle_missing_values(self) -> bool:
         base_df: pl.DataFrame = self.processed_df
 
-        _null_count = base_df.null_count()
+        # Before making changes.
+        _null_count_before = base_df.null_count()
+
+        # Add indicator columns for cols susceptible to missing data.
+        base_df = base_df.with_columns(pl.col("days_since_last_race").is_null().cast(pl.Int64).name.suffix("_is_null"))
+
+        # Fill nulls with a sentinel value like -999. Do not go bigger in order to prevent gradient issues.
+        base_df = base_df.with_columns(pl.col("days_since_last_race").fill_null(-999))
+
+        # After making changes.
+        _null_count_after = base_df.null_count()
 
         return True
 
@@ -408,6 +418,6 @@ class FeatureProcessor:
         self._extract_features()
 
         # Clean up data to prepare for transformer.
-        self._clean_up()
+        self._handle_missing_values()
 
         return self.processed_df
