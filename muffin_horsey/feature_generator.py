@@ -2,7 +2,7 @@ import yaml
 from pathlib import Path
 
 
-def generate_train_features(lag_count: int, other_count: int) -> list:
+def generate_train_features(lag_count: int, other_count: int) -> list[str]:
     yaml_path = Path.cwd() / "muffin_horsey" / "sample_training.yaml"
     # yaml_path = Path.cwd() / "sample_training.yaml"
 

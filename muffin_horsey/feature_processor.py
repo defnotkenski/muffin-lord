@@ -6,8 +6,12 @@ from muffin_horsey.feature_generator import generate_train_features
 class FeatureProcessor:
     def __init__(self, df: pl.DataFrame, target_type: Literal["win", "show", "place"]):
         self.base_df = df
-        self.target_type = target_type
         self.processed_df = None
+
+        self.target_type = target_type
+
+        all_features = generate_train_features(lag_count=1, other_count=4)
+        self.train_features = all_features
 
     @staticmethod
     def _process_lag_races(feature_df: pl.DataFrame) -> pl.DataFrame:
@@ -387,8 +391,7 @@ class FeatureProcessor:
             )
 
         # Select columns needed for training.
-        all_features = generate_train_features(lag_count=1, other_count=4)
-        feature_df = feature_df.select(all_features)
+        feature_df = feature_df.select(self.train_features)
 
         self.processed_df = feature_df
 
@@ -397,17 +400,16 @@ class FeatureProcessor:
     def _handle_missing_values(self) -> bool:
         base_df: pl.DataFrame = self.processed_df
 
-        # Before making changes.
-        _null_count_before = base_df.null_count()
-
         # Add indicator columns for cols susceptible to missing data.
-        base_df = base_df.with_columns(pl.col("days_since_last_race").is_null().cast(pl.Int64).name.suffix("_is_null"))
+        base_df = base_df.with_columns(pl.all().is_null().cast(pl.Int64).name.suffix("_is_null"))
 
         # Fill nulls with a sentinel value like -999. Do not go bigger in order to prevent gradient issues.
-        base_df = base_df.with_columns(pl.col("days_since_last_race").fill_null(-999))
+        base_df = base_df.with_columns(pl.col(pl.selectors.NUMERIC_DTYPES).fill_null(-999))
 
         # After making changes.
         _null_count_after = base_df.null_count()
+
+        self.processed_df = base_df
 
         return True
 
@@ -419,5 +421,7 @@ class FeatureProcessor:
 
         # Clean up data to prepare for transformer.
         self._handle_missing_values()
+
+        # Organize into categorical, continuous, and target cols for model.
 
         return self.processed_df
