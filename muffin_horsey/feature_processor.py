@@ -2,10 +2,14 @@ from typing import Literal
 import polars as pl
 from muffin_horsey.feature_generator import generate_train_features
 from typing import NamedTuple
+from sklearn.model_selection import train_test_split
 
 
 class DataFrameInfo(NamedTuple):
     df: pl.DataFrame
+    train_set: pl.DataFrame
+    validation_set: pl.DataFrame
+    eval_set: pl.DataFrame
     continuous_cols: list[str]
     categorical_cols: list[str]
     target_cols: list[str]
@@ -398,9 +402,6 @@ class FeatureProcessor:
                 (pl.col("official_final_position") <= 3).cast(pl.Int64).alias("target")
             )
 
-        # Select columns needed for training.
-        feature_df = feature_df.select(self.train_features)
-
         self.processed_df = feature_df
 
         return True
@@ -427,14 +428,44 @@ class FeatureProcessor:
         # Extract features from data.
         self._extract_features()
 
-        # Clean up data to prepare for transformer.
+        # Select columns needed for training.
+        working_df = self.processed_df
+        working_df = working_df.select(["race_date", "race_number", *self.train_features])
+
+        self.processed_df = working_df
+
+        # Clean up data to prepare for transformer. Requires pre-selected columns, do not give it the full columns.
         self._handle_missing_values()
 
+        working_df = self.processed_df
+
+        # Final sort for redundancy.
+        working_df = working_df.sort(["race_date", "track_code", "race_number"])
+
         # Organize into categorical, continuous, and target cols for model.
-        continuous_cols = self.processed_df.select(pl.selectors.numeric().exclude("target")).columns
-        string_cols = self.processed_df.select(pl.selectors.string()).columns
+        continuous_cols = working_df.select(pl.selectors.numeric().exclude("target")).columns
+        string_cols = working_df.select(pl.selectors.string()).columns
         target_cols = ["target"]
 
+        # Allocation of the processed dataset for train, validation, and evaluation.
+        # Get unique races.
+        unique_races = working_df.select(["race_date", "track_code", "race_number"]).unique(maintain_order=True)
+
+        # Split race identifiers.
+        race_train, race_temp = train_test_split(unique_races, random_state=42, shuffle=False, test_size=0.10)
+        race_validation, race_eval = train_test_split(race_temp, random_state=42, shuffle=False, test_size=0.50)
+
+        # Filter original dataset by race splits.
+        train_set = working_df.join(race_train, on=["race_date", "track_code", "race_number"])
+        validation_set = working_df.join(race_validation, on=["race_date", "track_code", "race_number"])
+        eval_set = working_df.join(race_eval, on=["race_date", "track_code", "race_number"])
+
         return DataFrameInfo(
-            df=self.processed_df, continuous_cols=continuous_cols, categorical_cols=string_cols, target_cols=target_cols
+            df=working_df,
+            train_set=train_set,
+            validation_set=validation_set,
+            eval_set=eval_set,
+            continuous_cols=continuous_cols,
+            categorical_cols=string_cols,
+            target_cols=target_cols,
         )
