@@ -8,6 +8,7 @@ dependencies = [
     "petname>=2.6",
     "playwright>=1.52.0",
     "polars>=1.30.0",
+    "pyarrow>=20.0.0",
     "pytorch-tabular",
     "pyyaml>=6.0.2",
     "requests>=2.32.4",

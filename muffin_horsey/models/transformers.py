@@ -149,8 +149,8 @@ def run_eval(dataset_config: DataFrameInfo) -> Path:
     # Convert to polars for easier manipulation.
     eval_predictions_df = pl.from_pandas(eval_predictions_df)
     live_predictions_df = pl.from_pandas(live_predictions_df) if live_predictions_df is not None else None
-    train_data_df = train_set_pandas
-    test_data_df = eval_set_pandas
+    train_data_df = pl.from_pandas(train_set_pandas)
+    test_data_df = pl.from_pandas(eval_set_pandas)
 
     # ===== Model evaluations. =====
 
