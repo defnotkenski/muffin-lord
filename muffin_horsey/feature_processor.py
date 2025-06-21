@@ -404,6 +404,10 @@ class FeatureProcessor:
 
         # Select only training columns + some helper columns for downstream logic.
         feature_df = feature_df.select(["race_date", "race_number", *self.train_features])
+
+        # Final sort for redundancy.
+        feature_df = feature_df.sort(["race_date", "track_code", "race_number"])
+
         self.processed_df = feature_df
 
         return True
@@ -422,6 +426,9 @@ class FeatureProcessor:
         # After making changes.
         _null_count_after = base_df.null_count()
 
+        # Final sort for redundancy.
+        base_df = base_df.sort(["race_date", "track_code", "race_number"])
+
         self.processed_df = base_df
 
         return True
@@ -437,9 +444,6 @@ class FeatureProcessor:
 
         # No more mutations of self.processed_df beyond this point.
         working_df = self.processed_df
-
-        # Final sort for redundancy.
-        working_df = working_df.sort(["race_date", "track_code", "race_number"])
 
         # Organize into categorical, continuous, and target cols for model.
         continuous_cols = working_df.select(

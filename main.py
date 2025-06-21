@@ -7,6 +7,8 @@ from pathlib import Path
 from schema import COLUMN_TYPES
 from muffin_horsey.models.transformers import train_model
 
+PATH_TO_TEMP_CSV = Path.cwd() / "datasets" / "temp_dataset.csv"
+
 
 def process_xml(xml_path: Path) -> list[dict]:
     with open("tags_selector.json", "r") as r:
@@ -87,13 +89,26 @@ def merge_xml() -> polars.DataFrame:
     all_data = []
     xml_files = Path.cwd().joinpath("datasets").rglob("*.xml")
 
-    # Iterate through every XML file and parse.
-    for xml in xml_files:
-        file_data = process_xml(xml_path=xml)
-        all_data.extend(file_data)
+    if not PATH_TO_TEMP_CSV.exists():
+        print(f"Could not find {PATH_TO_TEMP_CSV.name}. Running XML merge and saving csv for future cases.")
 
-    # Create polars dataframe from dict and apply appropriate sorting.
-    polars_df = polars.from_dicts(all_data)
+        # Iterate through every XML file and parse.
+        for xml in xml_files:
+            file_data = process_xml(xml_path=xml)
+            all_data.extend(file_data)
+
+        # Create polars dataframe from dict and apply appropriate sorting.
+        polars_df = polars.from_dicts(all_data)
+
+        # Write to CSV for efficient processing of downstream tasks.
+        polars_df.write_csv(PATH_TO_TEMP_CSV)
+    else:
+        print(f"Found and using {PATH_TO_TEMP_CSV.name}.")
+
+        polars_df = polars.read_csv(PATH_TO_TEMP_CSV)
+
+        polars_df = polars_df.cast({col: polars.Utf8 for col in polars_df.columns})
+        polars_df = polars_df.with_columns(polars.col("race_date").str.to_datetime())
 
     # Cleanup outlier values.
     polars_df = _cleanup_dataframe(base_polars_df=polars_df)
@@ -105,20 +120,11 @@ def merge_xml() -> polars.DataFrame:
     # Apply appropriate sorting before sending it off.
     polars_df = polars_df.sort(["race_date", "track_code", "race_number", "dollar_odds"])
 
-    # Write to CSV for efficient processing of downstream tasks.
-    csv_save = Path.cwd() / "datasets" / "temp_dataset.csv"
-    polars_df.write_csv(csv_save)
-
     return polars_df
 
 
 if __name__ == "__main__":
-    path_to_temp_csv = Path.cwd() / "datasets" / "temp_dataset.csv"
-
-    if not path_to_temp_csv.exists():
-        merged_df = merge_xml()
-    else:
-        merged_df = polars.read_csv(path_to_temp_csv)
+    merged_df = merge_xml()
 
     feature_processor = FeatureProcessor(df=merged_df, target_type="place")
     data_config = feature_processor.get_dataframe()
