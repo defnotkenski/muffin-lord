@@ -105,11 +105,20 @@ def merge_xml() -> polars.DataFrame:
     # Apply appropriate sorting before sending it off.
     polars_df = polars_df.sort(["race_date", "track_code", "race_number", "dollar_odds"])
 
+    # Write to CSV for efficient processing of downstream tasks.
+    csv_save = Path.cwd() / "datasets" / "temp_dataset.csv"
+    polars_df.write_csv(csv_save)
+
     return polars_df
 
 
 if __name__ == "__main__":
-    merged_df = merge_xml()
+    path_to_temp_csv = Path.cwd() / "datasets" / "temp_dataset.csv"
+
+    if not path_to_temp_csv.exists():
+        merged_df = merge_xml()
+    else:
+        merged_df = polars.read_csv(path_to_temp_csv)
 
     feature_processor = FeatureProcessor(df=merged_df, target_type="place")
     data_config = feature_processor.get_dataframe()

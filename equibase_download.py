@@ -58,9 +58,9 @@ def login_to_website(url, username, password):
 
             # ===== Download files here =====
 
-            base_download_url = "https://www.equibase.com/premium/eqpTMResultChartDownload.cfm?tid=82358476&seq="
+            base_download_url = "https://www.equibase.com/premium/eqpTMResultChartDownload.cfm?tid=82421072&seq="
             start_id = 1
-            end_id = 13
+            end_id = 20
 
             for file_id in range(start_id, end_id + 1):
                 try:

@@ -273,7 +273,7 @@ class FeatureProcessor:
 
         return base_df
 
-    def _extract_features(self) -> bool:
+    def _build_features(self) -> bool:
         # Set the base or working dataframe.
         feature_df = self.base_df
 
@@ -402,6 +402,8 @@ class FeatureProcessor:
                 (pl.col("official_final_position") <= 3).cast(pl.Int64).alias("target")
             )
 
+        # Select only training columns + some helper columns for downstream logic.
+        feature_df = feature_df.select(["race_date", "race_number", *self.train_features])
         self.processed_df = feature_df
 
         return True
@@ -410,7 +412,9 @@ class FeatureProcessor:
         base_df: pl.DataFrame = self.processed_df
 
         # Add indicator columns for cols susceptible to missing data.
-        base_df = base_df.with_columns(pl.all().exclude("target").is_null().cast(pl.Int64).name.suffix("_is_null"))
+        base_df = base_df.with_columns(
+            pl.all().exclude(["race_date", "race_number", "target"]).is_null().cast(pl.Int64).name.suffix("_is_null")
+        )
 
         # Fill nulls with a sentinel value like -999. Do not go bigger in order to prevent gradient issues.
         base_df = base_df.with_columns(pl.col(pl.selectors.NUMERIC_DTYPES).fill_null(-999))
@@ -426,24 +430,21 @@ class FeatureProcessor:
         """This function serves as the orchestrator of various methods in order to output a train-ready dataframe."""
 
         # Extract features from data.
-        self._extract_features()
-
-        # Select columns needed for training.
-        working_df = self.processed_df
-        working_df = working_df.select(["race_date", "race_number", *self.train_features])
-
-        self.processed_df = working_df
+        self._build_features()
 
         # Clean up data to prepare for transformer. Requires pre-selected columns, do not give it the full columns.
         self._handle_missing_values()
 
+        # No more mutations of self.processed_df beyond this point.
         working_df = self.processed_df
 
         # Final sort for redundancy.
         working_df = working_df.sort(["race_date", "track_code", "race_number"])
 
         # Organize into categorical, continuous, and target cols for model.
-        continuous_cols = working_df.select(pl.selectors.numeric().exclude("target")).columns
+        continuous_cols = working_df.select(
+            pl.selectors.numeric().exclude(["race_date", "race_number", "target"])
+        ).columns
         string_cols = working_df.select(pl.selectors.string()).columns
         target_cols = ["target"]
 
