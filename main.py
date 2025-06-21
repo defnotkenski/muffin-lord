@@ -5,6 +5,7 @@ from datetime import datetime
 from muffin_horsey.feature_processor import FeatureProcessor
 from pathlib import Path
 from schema import COLUMN_TYPES
+from muffin_horsey.models.transformers import train_model
 
 
 def process_xml(xml_path: Path) -> list[dict]:
@@ -111,4 +112,6 @@ if __name__ == "__main__":
     merged_df = merge_xml()
 
     feature_processor = FeatureProcessor(df=merged_df, target_type="place")
-    feature_processor.get_dataframe()
+    data_config = feature_processor.get_dataframe()
+
+    train_model(dataset_config=data_config)
