@@ -5,7 +5,7 @@ from datetime import datetime
 from muffin_horsey.feature_processor import FeatureProcessor
 from pathlib import Path
 from schema import COLUMN_TYPES
-from muffin_horsey.models.transformers import train_model
+from muffin_horsey.models.transformers import run_eval
 
 PATH_TO_TEMP_CSV = Path.cwd() / "datasets" / "temp_dataset.csv"
 
@@ -129,4 +129,4 @@ if __name__ == "__main__":
     feature_processor = FeatureProcessor(df=merged_df, target_type="place")
     data_config = feature_processor.get_dataframe()
 
-    train_model(dataset_config=data_config)
+    run_eval(dataset_config=data_config)
