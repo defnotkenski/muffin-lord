@@ -6,11 +6,11 @@ current_race:
   race_purse: 36000
   field_size: 9
   course_surface: Dirt
-  class_rating: 88
+#  class_rating: 88
   track_conditions: FT
-  runup_distance: 50
-  rail_distance: 20
-  sealed: false
+#  runup_distance: 50
+#  rail_distance: 20
+#  sealed: false
 
 current_horse:
   # Current horse 01/05: current horse-level metadata. (4 features)
@@ -27,11 +27,11 @@ current_horse_lags:
   recent_0_race_purse: 36000
   recent_0_field_size: 9
   recent_0_course_surface: Dirt
-  recent_0_class_rating: 88
+#  recent_0_class_rating: 88
   recent_0_track_conditions: FT
-  recent_0_runup_distance: 50
-  recent_0_rail_distance: 20
-  recent_0_sealed: false
+#  recent_0_runup_distance: 50
+#  recent_0_rail_distance: 20
+#  recent_0_sealed: false
 
   # Current horse 01/05: horse-level metadata lag 01/02. (4 features)
   recent_0_rank_in_odds: 0
@@ -70,7 +70,7 @@ other_horse_lags:
   # Other horse 02/05: compressed race-level metadata, horse-level metadata, and results lag 01/02. (12 features)
   other_X_recent_X_course_surface: Dirt
   other_X_recent_X_distance_furlongs: 8.80
-  other_X_recent_X_class_rating: 97
+#  other_X_recent_X_class_rating: 97
   other_X_recent_X_dollar_odds: 1.23
   other_X_recent_X_trainer_win_pct: 0.62
   other_X_recent_X_race_speed_vs_par: 12
