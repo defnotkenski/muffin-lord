@@ -1,0 +1,25 @@
+# Race-level metadata.
+current_race:
+  race_date: 2025-06-23
+  track_code: CD
+  race_number: 2
+  race_type: Claiming
+  distance: 900
+  distance_unit: F
+  race_purse: 36000
+  field_size: 9
+  course_surface: Dirt
+  track_conditions: FT
+
+# Current horse-level metadata.
+current_horse:
+  horse_name: Ballsack
+  trainer_first_name: Edward
+  trainer_last_name: Edgar
+  rank_in_odds: 0
+  dollar_odds: 0.76
+  days_since_last_race: 27
+  trainer_win_pct: 0.60
+  last_pp_race_date: 2025-05-27
+  last_pp_track_code: BALL
+  last_pp_race_number: 8

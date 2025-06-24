@@ -127,6 +127,8 @@ if __name__ == "__main__":
     merged_df = merge_xml()
 
     feature_processor = FeatureProcessor(df=merged_df, target_type="place")
-    data_config = feature_processor.get_dataframe()
 
-    run_eval(dataset_config=data_config)
+    data_config = feature_processor.get_dataframe()
+    # predict_df = feature_processor.get_predict_dataframe()
+
+    # run_eval(dataset_config=data_config, live_player_request=None)

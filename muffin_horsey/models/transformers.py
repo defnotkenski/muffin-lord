@@ -129,19 +129,21 @@ def train_model(
     return eval_df, predict_df
 
 
-def run_eval(dataset_config: DataFrameInfo) -> Path:
+def run_eval(dataset_config: DataFrameInfo, live_player_request: pl.DataFrame | None) -> Path:
 
     # ===== Train the stacked models. =====
 
     train_set_pandas = dataset_config.train_set.to_pandas()
     validation_set_pandas = dataset_config.validation_set.to_pandas()
     eval_set_pandas = dataset_config.eval_set.to_pandas()
+    live_player_request_pandas = live_player_request.to_pandas()
 
     eval_predictions_df, live_predictions_df = train_model(
         dataset_config=dataset_config,
         train_set=train_set_pandas,
         validation_set=validation_set_pandas,
         eval_set=eval_set_pandas,
+        live_player_df=live_player_request_pandas,
     )
 
     # ===== Polars conversion. =====
