@@ -6,6 +6,7 @@ from muffin_horsey.feature_processor import FeatureProcessor
 from pathlib import Path
 from schema import COLUMN_TYPES
 from muffin_horsey.models.transformers import run_eval
+from muffin_horsey.helpers import cleanup_dataframe
 
 PATH_TO_TEMP_CSV = Path.cwd() / "datasets" / "temp_dataset.csv"
 
@@ -68,23 +69,6 @@ def process_xml(xml_path: Path) -> list[dict]:
     return polars_dict
 
 
-def _cleanup_dataframe(base_polars_df: polars.DataFrame) -> polars.DataFrame:
-    # Convert all instances of " " to None across all columns.
-    cols_to_replace = ["pace_call_1", "pace_call_2", "trainer_first_name", "owner_full_name"]
-
-    base_polars_df = base_polars_df.with_columns(
-        [
-            polars.when(polars.col(col) == " ").then(polars.lit(None)).otherwise(polars.col(col)).alias(col)
-            for col in cols_to_replace
-        ]
-    )
-
-    # Check for single space " " in all columns.
-    _df_check_1_post = base_polars_df.select([(polars.col("*").exclude("race_date", "last_pp_race_date") == " ").sum()])
-
-    return base_polars_df
-
-
 def merge_xml() -> polars.DataFrame:
     all_data = []
     xml_files = Path.cwd().joinpath("datasets").rglob("*.xml")
@@ -111,7 +95,7 @@ def merge_xml() -> polars.DataFrame:
         polars_df = polars_df.with_columns(polars.col("race_date").str.to_datetime())
 
     # Cleanup outlier values.
-    polars_df = _cleanup_dataframe(base_polars_df=polars_df)
+    polars_df = cleanup_dataframe(base_polars_df=polars_df)
 
     # Cast columns to appropriate dtypes.
     polars_df = polars_df.cast(COLUMN_TYPES)

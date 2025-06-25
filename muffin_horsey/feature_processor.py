@@ -6,6 +6,8 @@ from typing import NamedTuple
 from sklearn.model_selection import train_test_split
 from pathlib import Path
 import yaml
+from schema import COLUMN_TYPES
+from muffin_horsey.helpers import cleanup_dataframe
 
 
 class DataFrameInfo(NamedTuple):
@@ -405,13 +407,22 @@ class FeatureProcessor:
             predict_data = yaml.safe_load(r_yaml)
 
         base_df = polars.from_dict({**predict_data["current_race"], **predict_data["current_horse"]})
-        base_df = base_df.cast(
-            {col: pl.Utf8 for col in base_df.columns if col not in ["race_date", "last_pp_race_date"]}
-        )
+
+        base_df = base_df.cast({col: dtype for col, dtype in COLUMN_TYPES.items() if col in base_df.columns})
+
+        base_df = base_df.with_columns(polars.col("last_pp_race_date").str.to_datetime())
+        base_df = base_df.cast({"race_date": pl.Datetime})
 
         load_df = polars.read_csv(path_to_historicals_csv)
-        base_df = polars.concat([load_df, base_df])
 
-        base_df = self._build_features(predict_df=base_df)
+        load_df = load_df.cast(COLUMN_TYPES)
+        load_df = load_df.with_columns(pl.col(["race_date", "last_pp_race_date"]).str.to_datetime())
 
-        return base_df
+        load_df = load_df.select(base_df.columns)
+
+        concat_df = polars.concat([load_df, base_df])
+        concat_df = cleanup_dataframe(base_polars_df=concat_df)
+
+        concat_df = self._build_features(predict_df=concat_df)
+
+        return concat_df
