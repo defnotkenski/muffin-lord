@@ -30,8 +30,6 @@ class FeatureProcessor:
 
     @staticmethod
     def _process_lag_races(feature_df: pl.DataFrame) -> pl.DataFrame:
-        # Find horse's last race based on track code and race number.
-        # feature_df = feature_df.with_columns(pl.col("last_pp_track_code").alias("track_code_recent_0"))
 
         feature_df = feature_df.join(
             feature_df.select(
@@ -63,104 +61,24 @@ class FeatureProcessor:
                     "point_of_call_final_position",
                     "point_of_call_final_lengths",
                     "speed_rating",
-                    "par_time",
-                    "win_time",
+                    "race_speed_vs_par",
+                    "horse_speed_vs_par",
+                    "horse_time_vs_winner",
+                    "speed_rating_vs_field_avg",
+                    "speed_rating_vs_winner",
                 ]
             ),
             left_on=["last_pp_race_date", "last_pp_track_code", "last_pp_race_number", "horse_name"],
             right_on=["race_date", "track_code", "race_number", "horse_name"],
             how="left",
             suffix="_recent_0",
+            coalesce=False,
         )
 
-        # Rename lag columns with approprate prefix.
+        # ===== Rename lag columns with approprate prefix. =====
+
         feature_df = feature_df.rename(
             {col: f"recent_0_{col.replace("_recent_0", "")}" for col in feature_df.columns if col.endswith("_recent_0")}
-        )
-
-        # Calculate race_speed_vs_par.
-        # Final time of winner - par time (in seconds or lengths).
-        feature_df = feature_df.with_columns(
-            pl.when(pl.col("recent_0_par_time") != 0.00)
-            .then(pl.col("recent_0_win_time") - pl.col("recent_0_par_time"))
-            .otherwise(pl.lit(None))
-            .alias("recent_0_race_speed_vs_par")
-        )
-
-        # ===== Calculate horse_speed_vs_par. =====
-
-        length_seconds = 0.2
-
-        feature_df = feature_df.with_columns(
-            (pl.col("recent_0_point_of_call_final_lengths") * length_seconds + pl.col("recent_0_win_time")).alias(
-                "recent_0_horse_finish_time"
-            )
-        )
-
-        feature_df = feature_df.with_columns(
-            (pl.col("recent_0_horse_finish_time") - pl.col("recent_0_par_time")).alias("recent_0_horse_speed_vs_par")
-        )
-
-        # Calculate the horse_time_vs_winner.
-        feature_df = feature_df.with_columns(
-            (pl.col("recent_0_horse_finish_time") - pl.col("recent_0_win_time")).alias("recent_0_horse_time_vs_winner")
-        )
-
-        # ===== Calculate the recent_0_speed_rating_vs_field_avg. =====
-        # Horse_rating - avg_field_rating.
-
-        # First, create field averages for all races in the dataset
-        race_field_stats = feature_df.group_by(["race_date", "track_code", "race_number"]).agg(
-            [pl.col("speed_rating").alias("all_speed_ratings_in_race")]
-        )
-
-        # Then join this back to get the field data for each horse's recent_0 race
-        feature_df = feature_df.join(
-            race_field_stats,
-            left_on=["last_pp_race_date", "last_pp_track_code", "last_pp_race_number"],
-            right_on=["race_date", "track_code", "race_number"],
-            how="left",
-            suffix="_field_data",
-        )
-
-        # Now calculate field average excluding the current horse's speed rating
-        feature_df = feature_df.with_columns(
-            (
-                (pl.col("all_speed_ratings_in_race").list.sum() - pl.col("recent_0_speed_rating"))
-                / (pl.col("all_speed_ratings_in_race").list.len() - 1)
-            ).alias("recent_0_field_avg_speed_rating")
-        )
-
-        # Horse's speed rating minus average of all other horses in that historical race
-        feature_df = feature_df.with_columns(
-            (pl.col("recent_0_speed_rating") - pl.col("recent_0_field_avg_speed_rating")).alias(
-                "recent_0_speed_rating_vs_field_avg"
-            )
-        )
-
-        # ===== Calculate the speed_rating_vs_winner. =====
-
-        # Get winner's speed rating for each historical race
-        race_winner_stats = feature_df.group_by(["race_date", "track_code", "race_number"]).agg(
-            [pl.col("speed_rating").filter(pl.col("official_final_position") == 1).first().alias("winner_speed_rating")]
-        )
-
-        # Join to get winner's speed rating from each horse's historical race
-        feature_df = feature_df.join(
-            race_winner_stats,
-            left_on=["last_pp_race_date", "last_pp_track_code", "last_pp_race_number"],
-            right_on=["race_date", "track_code", "race_number"],
-            how="left",
-            suffix="_recent_0",
-        )
-
-        # Now you have recent_0_winner_speed_rating available
-        feature_df = feature_df.rename({"winner_speed_rating": "recent_0_winner_speed_rating"})
-
-        feature_df = feature_df.with_columns(
-            (pl.col("recent_0_speed_rating") - pl.col("recent_0_winner_speed_rating")).alias(
-                "recent_0_speed_rating_vs_winner"
-            )
         )
 
         return feature_df
@@ -168,20 +86,20 @@ class FeatureProcessor:
     @staticmethod
     def _process_opponents(base_df: pl.DataFrame) -> pl.DataFrame:
         # Generate the current race features for the top 4 opponent horses. (ranked by dollar_odds)
+        opp_cols_to_add = [
+            "horse_name",
+            "dollar_odds",
+            "rank_in_odds",
+            "trainer_win_pct",
+            "days_since_last_race",
+            "last_pp_race_date",
+            "last_pp_track_code",
+            "last_pp_race_number",
+        ]
+
         race_data = (
             base_df.group_by(["race_date", "track_code", "race_number"])
-            .agg(
-                [
-                    pl.col("horse_name").sort_by("rank_in_odds").alias("all_horse_name"),
-                    pl.col("dollar_odds").sort_by("rank_in_odds").alias("all_dollar_odds"),
-                    pl.col("rank_in_odds").sort_by("rank_in_odds").alias("all_rank_in_odds"),
-                    pl.col("trainer_win_pct").sort_by("rank_in_odds").alias("all_trainer_win_pct"),
-                    pl.col("days_since_last_race").sort_by("rank_in_odds").alias("all_days_since_last_race"),
-                    pl.col("last_pp_race_date").sort_by("rank_in_odds").alias("all_last_pp_race_date"),
-                    pl.col("last_pp_track_code").sort_by("rank_in_odds").alias("all_last_pp_track_code"),
-                    pl.col("last_pp_race_number").sort_by("rank_in_odds").alias("all_last_pp_race_number"),
-                ]
-            )
+            .agg([pl.col(col).sort_by("rank_in_odds").alias(f"all_{col}") for col in opp_cols_to_add])
             .sort(["race_date", "track_code", "race_number"])
         )
 
@@ -201,120 +119,21 @@ class FeatureProcessor:
             .alias("opponent_indices")
         )
 
-        # Use the offset opponent indices to grab the appropriate values for each col.
-        # Create opp_X_dollar_odds.
-        base_df = base_df.with_columns(
-            [
-                pl.col("all_dollar_odds")
-                .list.get(pl.col("opponent_indices").list.get(0), null_on_oob=True)
-                .alias("opp_1_dollar_odds"),
-                pl.col("all_dollar_odds")
-                .list.get(pl.col("opponent_indices").list.get(1), null_on_oob=True)
-                .alias("opp_2_dollar_odds"),
-                pl.col("all_dollar_odds")
-                .list.get(pl.col("opponent_indices").list.get(2), null_on_oob=True)
-                .alias("opp_3_dollar_odds"),
-                pl.col("all_dollar_odds")
-                .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
-                .alias("opp_4_dollar_odds"),
-            ]
-        )
+        # ===== Use the offset opponent indices to grab the appropriate values for each col. =====
 
-        # Create opp_X_rank_in_odds.
-        base_df = base_df.with_columns(
-            [
-                pl.col("all_rank_in_odds")
-                .list.get(pl.col("opponent_indices").list.get(0), null_on_oob=True)
-                .alias("opp_1_rank_in_odds"),
-                pl.col("all_rank_in_odds")
-                .list.get(pl.col("opponent_indices").list.get(1), null_on_oob=True)
-                .alias("opp_2_rank_in_odds"),
-                pl.col("all_rank_in_odds")
-                .list.get(pl.col("opponent_indices").list.get(2), null_on_oob=True)
-                .alias("opp_3_rank_in_odds"),
-                pl.col("all_rank_in_odds")
-                .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
-                .alias("opp_4_rank_in_odds"),
-            ]
-        )
+        for col in opp_cols_to_add:
 
-        # Create opp_X_days_since_last_race.
-        base_df = base_df.with_columns(
-            [
-                pl.col("all_days_since_last_race")
-                .list.get(pl.col("opponent_indices").list.get(0), null_on_oob=True)
-                .alias("opp_1_days_since_last_race"),
-                pl.col("all_days_since_last_race")
-                .list.get(pl.col("opponent_indices").list.get(1), null_on_oob=True)
-                .alias("opp_2_days_since_last_race"),
-                pl.col("all_days_since_last_race")
-                .list.get(pl.col("opponent_indices").list.get(2), null_on_oob=True)
-                .alias("opp_3_days_since_last_race"),
-                pl.col("all_days_since_last_race")
-                .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
-                .alias("opp_4_days_since_last_race"),
-            ]
-        )
+            base_df = base_df.with_columns(
+                [
+                    pl.col(f"all_{col}")
+                    .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
+                    .alias(f"opp_{idx + 1}_{col}")
+                    for idx in range(4)
+                ]
+            )
 
-        # Create opp_X_trainer_win_pct.
-        base_df = base_df.with_columns(
-            [
-                pl.col("all_trainer_win_pct")
-                .list.get(pl.col("opponent_indices").list.get(0), null_on_oob=True)
-                .alias("opp_1_trainer_win_pct"),
-                pl.col("all_trainer_win_pct")
-                .list.get(pl.col("opponent_indices").list.get(1), null_on_oob=True)
-                .alias("opp_2_trainer_win_pct"),
-                pl.col("all_trainer_win_pct")
-                .list.get(pl.col("opponent_indices").list.get(2), null_on_oob=True)
-                .alias("opp_3_trainer_win_pct"),
-                pl.col("all_trainer_win_pct")
-                .list.get(pl.col("opponent_indices").list.get(3), null_on_oob=True)
-                .alias("opp_4_trainer_win_pct"),
-            ]
-        )
+        # ===== Create opponent lags. =====
 
-        # Create opp_X_horse_name.
-        base_df = base_df.with_columns(
-            [
-                pl.col("all_horse_name")
-                .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
-                .alias(f"opp_{idx + 1}_horse_name")
-                for idx in range(4)
-            ]
-        )
-
-        # Create opp_X_last_pp_race_date.
-        base_df = base_df.with_columns(
-            [
-                pl.col("all_last_pp_race_date")
-                .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
-                .alias(f"opp_{idx+1}_last_pp_race_date")
-                for idx in range(4)
-            ]
-        )
-
-        # Create opp_X_last_pp_track_code.
-        base_df = base_df.with_columns(
-            [
-                pl.col("all_last_pp_track_code")
-                .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
-                .alias(f"opp_{idx + 1}_last_pp_track_code")
-                for idx in range(4)
-            ]
-        )
-
-        # Create opp_X_last_pp_race_number.
-        base_df = base_df.with_columns(
-            [
-                pl.col("all_last_pp_race_number")
-                .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
-                .alias(f"opp_{idx + 1}_last_pp_race_number")
-                for idx in range(4)
-            ]
-        )
-
-        # Join opponent's last race data.
         for i in range(4):
             base_df = base_df.join(
                 base_df.select(
@@ -328,13 +147,13 @@ class FeatureProcessor:
                         "class_rating",
                         "dollar_odds",
                         "trainer_win_pct",
-                        "race_speed_vs_par",
-                        "horse_speed_vs_par",
-                        "speed_rating",
-                        "speed_rating_vs_field",
-                        "speed_rating_vs_winner",
                         "start_position",
                         "official_final_position",
+                        "speed_rating",
+                        "race_speed_vs_par",
+                        "horse_speed_vs_par",
+                        "speed_rating_vs_field_avg",
+                        "speed_rating_vs_winner",
                     ]
                 ),
                 left_on=[
@@ -360,22 +179,26 @@ class FeatureProcessor:
         return base_df
 
     def _build_features(self, predict_df: pl.DataFrame | None = None) -> bool | pl.DataFrame:
-        # Set the base or working dataframe.
+        # ===== Set the base or working dataframe. =====
+
         if predict_df is None:
             feature_df = self.base_df
         else:
             feature_df = predict_df
 
-        # Create new features based on existing columns.
+        # ===== Create new features based on existing columns. =====
+
         # Add distance_furlongs column.
         feature_df = feature_df.with_columns((pl.col("distance").cast(pl.Float64) / 100).alias("distance_furlongs"))
 
-        # Add field_size column.
+        # ===== Add field_size column. =====
+
         feature_df = feature_df.with_columns(
             pl.count().over(["race_date", "track_code", "race_number"]).alias("field_size")
         )
 
-        # Add rank_in_odds column.
+        # ===== Add rank_in_odds column. =====
+
         feature_df = feature_df.with_columns(
             pl.col("dollar_odds")
             .rank(method="ordinal")
@@ -383,12 +206,14 @@ class FeatureProcessor:
             .alias("rank_in_odds")
         )
 
-        # Add days_since_last_race column.
+        # ===== Add days_since_last_race column. =====
+
         feature_df = feature_df.with_columns(
             (pl.col("race_date") - pl.col("last_pp_race_date")).dt.total_days().alias("days_since_last_race")
         )
 
-        # Pipeline to add trainer_win_pct_30d column.
+        # ===== Pipeline to add trainer_win_pct_30d column. =====
+
         feature_df = feature_df.with_columns(
             pl.concat_str([pl.col("trainer_first_name"), pl.col("trainer_last_name")], separator=" ").alias(
                 "trainer_full_name"
@@ -423,61 +248,65 @@ class FeatureProcessor:
             .alias("trainer_win_pct")
         )
 
-        # Results-derived feature calculations.
-        # # Calculate race_speed_vs_par.
-        # feature_df = feature_df.with_columns(
-        #     pl.when(pl.col("par_time") != 0.00)
-        #     .then(pl.col("win_time") - pl.col("par_time"))
-        #     .otherwise(pl.lit(None))
-        #     .alias("race_speed_vs_par")
-        # )
-        #
-        # # Calculate horse_speed_vs_par.
-        # length_seconds = 0.2
-        #
-        # feature_df = feature_df.with_columns(
-        #     (pl.col("point_of_call_final_lengths") * length_seconds + pl.col("win_time")).alias("horse_finish_time")
-        # )
-        #
-        # feature_df = feature_df.with_columns(
-        #     (pl.col("horse_finish_time") - pl.col("par_time")).alias("horse_speed_vs_par")
-        # )
-        #
-        # # Calculate the horse_time_vs_winner.
-        # feature_df = feature_df.with_columns(
-        #     (pl.col("horse_finish_time") - pl.col("win_time")).alias("horse_time_vs_winner")
-        # )
-        #
-        # # Calculate the speed_rating_vs_field.
-        # feature_df = feature_df.with_columns(
-        #     ((pl.col("speed_rating").sum() - pl.col("speed_rating")) / (pl.len() - 1))
-        #     .over(["race_date", "track_code", "race_number"])
-        #     .alias("field_avg_speed_rating")
-        # )
-        #
-        # feature_df = feature_df.with_columns(
-        #     (pl.col("speed_rating") - pl.col("field_avg_speed_rating")).alias("speed_rating_vs_field")
-        # )
-        #
-        # # Calculate the speed_rating_vs_winner.
-        # feature_df = feature_df.with_columns(
-        #     pl.col("speed_rating")
-        #     .get(pl.col("official_final_position").arg_min())
-        #     .over(["race_date", "track_code", "race_number"])
-        #     .alias("speed_rating_winner")
-        # )
-        #
-        # feature_df = feature_df.with_columns(
-        #     (pl.col("speed_rating") - pl.col("speed_rating_winner")).alias("speed_rating_vs_winner")
-        # )
+        # ===== Results-derived feature calculations. =====
 
-        # Create lag races for horses.
+        # Calculate race_speed_vs_par.
+        feature_df = feature_df.with_columns(
+            pl.when(pl.col("par_time") != 0.00)
+            .then(pl.col("win_time") - pl.col("par_time"))
+            .otherwise(pl.lit(None))
+            .alias("race_speed_vs_par")
+        )
+
+        # Calculate horse_speed_vs_par.
+        length_seconds = 0.2
+
+        feature_df = feature_df.with_columns(
+            (pl.col("point_of_call_final_lengths") * length_seconds + pl.col("win_time")).alias("horse_finish_time")
+        )
+
+        feature_df = feature_df.with_columns(
+            (pl.col("horse_finish_time") - pl.col("par_time")).alias("horse_speed_vs_par")
+        )
+
+        # Calculate the horse_time_vs_winner.
+        feature_df = feature_df.with_columns(
+            (pl.col("horse_finish_time") - pl.col("win_time")).alias("horse_time_vs_winner")
+        )
+
+        # Calculate the speed_rating_vs_field_avg.
+        feature_df = feature_df.with_columns(
+            ((pl.col("speed_rating").sum() - pl.col("speed_rating")) / (pl.len() - 1))
+            .over(["race_date", "track_code", "race_number"])
+            .alias("field_avg_speed_rating")
+        )
+
+        feature_df = feature_df.with_columns(
+            (pl.col("speed_rating") - pl.col("field_avg_speed_rating")).alias("speed_rating_vs_field_avg")
+        )
+
+        # Calculate the speed_rating_vs_winner.
+        feature_df = feature_df.with_columns(
+            pl.col("speed_rating")
+            .get(pl.col("official_final_position").arg_min())
+            .over(["race_date", "track_code", "race_number"])
+            .alias("speed_rating_winner")
+        )
+
+        feature_df = feature_df.with_columns(
+            (pl.col("speed_rating") - pl.col("speed_rating_winner")).alias("speed_rating_vs_winner")
+        )
+
+        # ===== Create lag races for horses. =====
+
         feature_df = self._process_lag_races(feature_df=feature_df)
 
-        # Process opponent horses.
+        # ===== Process opponent horses. =====
+
         feature_df = self._process_opponents(base_df=feature_df)
 
-        # Generate target columns.
+        # ===== Generate target columns. =====
+
         if self.target_type == "win":
             feature_df = feature_df.with_columns(
                 (pl.col("official_final_position") == 1).cast(pl.Int64).alias("target")
@@ -491,10 +320,12 @@ class FeatureProcessor:
                 (pl.col("official_final_position") <= 3).cast(pl.Int64).alias("target")
             )
 
-        # Select only training columns + some helper columns for downstream logic.
+        # ===== Select only training columns + some helper columns for downstream logic. =====
+
         feature_df = feature_df.select(["race_date", "race_number", *self.train_features])
 
-        # Final sort for redundancy.
+        # ===== Final sort for redundancy. =====
+
         feature_df = feature_df.sort(["race_date", "track_code", "race_number"])
 
         if predict_df is None:

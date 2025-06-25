@@ -51,7 +51,7 @@ current_horse_lags:
   recent_0_point_of_call_final_position: 6
   recent_0_point_of_call_final_lengths: 6.3
   recent_0_speed_rating: 78 # Straightforward. Higher is better.
-  recent_0_speed_rating_vs_field: 23 # Shows whether the horse overperformed or underperformed relative to peers. Horse_rating - avg_field_rating.
+  recent_0_speed_rating_vs_field_avg: 23 # Shows whether the horse overperformed or underperformed relative to peers. Horse_rating - avg_field_rating.
   recent_0_speed_rating_vs_winner: 12 # How close the favorite was to the top performance. Speed_rating - winner_speed_rating.
 
   # Current horse 01/05: lag 02/02 will appear here if applicable.
@@ -76,7 +76,7 @@ other_horse_lags:
   other_X_recent_X_race_speed_vs_par: 12
   other_X_recent_X_horse_speed_vs_par: 19
   other_X_recent_X_speed_rating: 89
-  other_X_recent_X_speed_rating_vs_field: 12
+  other_X_recent_X_speed_rating_vs_field_avg: 12
   other_X_recent_X_speed_rating_vs_winner: 32
   other_X_recent_X_start_position: 3
   other_X_recent_X_official_final_position: 5
