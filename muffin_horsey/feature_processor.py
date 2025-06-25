@@ -31,6 +31,45 @@ class FeatureProcessor:
         self.train_features = all_features
 
     @staticmethod
+    def _build_prediction_safe_features(working_df: pl.DataFrame) -> pl.DataFrame:
+        """Features that can be calculated at prediction time"""
+
+        # ===== Add distance_furlongs column. =====
+
+        working_df = working_df.with_columns((pl.col("distance").cast(pl.Float64) / 100).alias("distance_furlongs"))
+
+        # ===== Add field_size column. =====
+
+        working_df = working_df.with_columns(
+            pl.count().over(["race_date", "track_code", "race_number"]).alias("field_size")
+        )
+
+        # ===== Add rank_in_odds column. =====
+
+        working_df = working_df.with_columns(
+            pl.col("dollar_odds")
+            .rank(method="ordinal")
+            .over(["race_date", "track_code", "race_number"])
+            .alias("rank_in_odds")
+        )
+
+        # ===== Add days_since_last_race column. =====
+
+        working_df = working_df.with_columns(
+            (pl.col("race_date") - pl.col("last_pp_race_date")).dt.total_days().alias("days_since_last_race")
+        )
+
+        # ===== Add trainer_full_name. =====
+
+        working_df = working_df.with_columns(
+            pl.concat_str([pl.col("trainer_first_name"), pl.col("trainer_last_name")], separator=" ").alias(
+                "trainer_full_name"
+            )
+        )
+
+        return working_df
+
+    @staticmethod
     def _process_lag_races(feature_df: pl.DataFrame) -> pl.DataFrame:
 
         feature_df = feature_df.join(
@@ -180,47 +219,16 @@ class FeatureProcessor:
 
         return base_df
 
-    def _build_features(self, predict_df: pl.DataFrame | None = None) -> bool | pl.DataFrame:
+    def _build_features(self) -> bool:
         # ===== Set the base or working dataframe. =====
 
-        if predict_df is None:
-            feature_df = self.base_df
-        else:
-            feature_df = predict_df
+        feature_df = self.base_df
 
         # ===== Create new features based on existing columns. =====
 
-        # Add distance_furlongs column.
-        feature_df = feature_df.with_columns((pl.col("distance").cast(pl.Float64) / 100).alias("distance_furlongs"))
+        feature_df = self._build_prediction_safe_features(working_df=feature_df)
 
-        # ===== Add field_size column. =====
-
-        feature_df = feature_df.with_columns(
-            pl.count().over(["race_date", "track_code", "race_number"]).alias("field_size")
-        )
-
-        # ===== Add rank_in_odds column. =====
-
-        feature_df = feature_df.with_columns(
-            pl.col("dollar_odds")
-            .rank(method="ordinal")
-            .over(["race_date", "track_code", "race_number"])
-            .alias("rank_in_odds")
-        )
-
-        # ===== Add days_since_last_race column. =====
-
-        feature_df = feature_df.with_columns(
-            (pl.col("race_date") - pl.col("last_pp_race_date")).dt.total_days().alias("days_since_last_race")
-        )
-
-        # ===== Pipeline to add trainer_win_pct_30d column. =====
-
-        feature_df = feature_df.with_columns(
-            pl.concat_str([pl.col("trainer_first_name"), pl.col("trainer_last_name")], separator=" ").alias(
-                "trainer_full_name"
-            )
-        )
+        # ===== Pipeline to add trainer_win_pct column. =====
 
         feature_df = feature_df.with_columns(
             (
@@ -330,11 +338,9 @@ class FeatureProcessor:
 
         feature_df = feature_df.sort(["race_date", "track_code", "race_number"])
 
-        if predict_df is None:
-            self.processed_df = feature_df
-            return True
+        self.processed_df = feature_df
 
-        return feature_df
+        return True
 
     def _handle_missing_values(self) -> bool:
         base_df: pl.DataFrame = self.processed_df
@@ -401,7 +407,7 @@ class FeatureProcessor:
 
     def get_predict_dataframe(self) -> pl.DataFrame:
         path_to_predict_yaml = Path.cwd() / "predict.yaml"
-        path_to_historicals_csv = Path.cwd() / "datasets" / "temp_dataset.csv"
+        historical_df_path = Path.cwd() / "datasets" / "temp_dataset.csv"
 
         with open(path_to_predict_yaml, "r") as r_yaml:
             predict_data = yaml.safe_load(r_yaml)
@@ -413,16 +419,23 @@ class FeatureProcessor:
         base_df = base_df.with_columns(polars.col("last_pp_race_date").str.to_datetime())
         base_df = base_df.cast({"race_date": pl.Datetime})
 
-        load_df = polars.read_csv(path_to_historicals_csv)
+        base_df = self._build_prediction_safe_features(working_df=base_df)
 
-        load_df = load_df.cast(COLUMN_TYPES)
-        load_df = load_df.with_columns(pl.col(["race_date", "last_pp_race_date"]).str.to_datetime())
+        historical_df = polars.read_csv(historical_df_path)
 
-        load_df = load_df.select(base_df.columns)
+        historical_df = historical_df.cast({col: pl.Utf8 for col in historical_df.columns})
 
-        concat_df = polars.concat([load_df, base_df])
-        concat_df = cleanup_dataframe(base_polars_df=concat_df)
+        historical_df = cleanup_dataframe(base_polars_df=historical_df)
+        historical_df = historical_df.cast(COLUMN_TYPES)
 
-        concat_df = self._build_features(predict_df=concat_df)
+        historical_df = historical_df.with_columns(pl.col(["race_date", "last_pp_race_date"]).str.to_datetime())
 
-        return concat_df
+        # ===== Add trainer_win_pct column. =====
+
+        trainer_stats = (
+            historical_df.filter(pl.col("race_date") < base_df["race_date"][0])
+            .group_by("trainer_full_name")
+            .agg([(pl.col("official_final_position").is_in([1, 2, 3]).sum() / pl.len()).alias("trainer_win_pct")])
+        )
+
+        return base_df
