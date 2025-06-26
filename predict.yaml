@@ -1,8 +1,8 @@
 # Race-level metadata.
 current_race:
-  race_date: 2025-06-24
+  race_date: 2025-06-20
   track_code: CD
-  race_number: 2
+  race_number: 8
   race_type: Claiming
   distance: 900
   distance_unit: F

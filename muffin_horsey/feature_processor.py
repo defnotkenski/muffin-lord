@@ -7,7 +7,6 @@ from sklearn.model_selection import train_test_split
 from pathlib import Path
 import yaml
 from schema import COLUMN_TYPES
-from muffin_horsey.helpers import cleanup_dataframe
 
 
 class DataFrameInfo(NamedTuple):
@@ -23,7 +22,9 @@ class DataFrameInfo(NamedTuple):
 class FeatureProcessor:
     def __init__(self, df: pl.DataFrame, target_type: Literal["win", "show", "place"]):
         self.base_df: pl.DataFrame = df
+
         self.processed_df: pl.DataFrame | None = None
+        self.features_raw_df: pl.DataFrame | None = None
 
         self.target_type: str = target_type
 
@@ -70,10 +71,12 @@ class FeatureProcessor:
         return working_df
 
     @staticmethod
-    def _process_lag_races(feature_df: pl.DataFrame) -> pl.DataFrame:
+    def _process_lag_races(feature_df: pl.DataFrame, lookup_df: pl.DataFrame | None = None) -> pl.DataFrame:
+        # Use lookup_df if provided, otherwise use feature_df for self-join
+        source_df = lookup_df if lookup_df is not None else feature_df
 
         feature_df = feature_df.join(
-            feature_df.select(
+            source_df.select(
                 [
                     "race_date",
                     "race_number",
@@ -330,14 +333,16 @@ class FeatureProcessor:
                 (pl.col("official_final_position") <= 3).cast(pl.Int64).alias("target")
             )
 
-        # ===== Select only training columns + some helper columns for downstream logic. =====
-
-        feature_df = feature_df.select(["race_date", "race_number", *self.train_features])
-
         # ===== Final sort for redundancy. =====
 
         feature_df = feature_df.sort(["race_date", "track_code", "race_number"])
 
+        # ===== Set the raw features df to be used as a helper df when making predictions downstream. =====
+        self.features_raw_df = feature_df
+
+        # ===== Select only training columns + some helper columns for downstream logic. =====
+
+        feature_df = feature_df.select(["race_date", "race_number", *self.train_features])
         self.processed_df = feature_df
 
         return True
@@ -407,7 +412,6 @@ class FeatureProcessor:
 
     def get_predict_dataframe(self) -> pl.DataFrame:
         path_to_predict_yaml = Path.cwd() / "predict.yaml"
-        historical_df_path = Path.cwd() / "datasets" / "temp_dataset.csv"
 
         with open(path_to_predict_yaml, "r") as r_yaml:
             predict_data = yaml.safe_load(r_yaml)
@@ -421,21 +425,21 @@ class FeatureProcessor:
 
         base_df = self._build_prediction_safe_features(working_df=base_df)
 
-        historical_df = polars.read_csv(historical_df_path)
-
-        historical_df = historical_df.cast({col: pl.Utf8 for col in historical_df.columns})
-
-        historical_df = cleanup_dataframe(base_polars_df=historical_df)
-        historical_df = historical_df.cast(COLUMN_TYPES)
-
-        historical_df = historical_df.with_columns(pl.col(["race_date", "last_pp_race_date"]).str.to_datetime())
-
         # ===== Add trainer_win_pct column. =====
+
+        historical_df = self.features_raw_df
 
         trainer_stats = (
             historical_df.filter(pl.col("race_date") < base_df["race_date"][0])
             .group_by("trainer_full_name")
             .agg([(pl.col("official_final_position").is_in([1, 2, 3]).sum() / pl.len()).alias("trainer_win_pct")])
         )
+
+        base_df = base_df.join(trainer_stats, on="trainer_full_name", how="left")
+        base_df = base_df.with_columns(pl.col("trainer_win_pct").fill_null(0))
+
+        # Process lag races for the prediction df.
+
+        base_df = self._process_lag_races(feature_df=base_df, lookup_df=historical_df)
 
         return base_df
