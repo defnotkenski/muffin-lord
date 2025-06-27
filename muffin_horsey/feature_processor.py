@@ -189,28 +189,30 @@ class FeatureProcessor:
 
         # ===== Create lag cols for the opponents. =====
 
+        source_df_select = [
+            "race_date",
+            "track_code",
+            "race_number",
+            "horse_name",
+            "course_surface",
+            "distance_furlongs",
+            "class_rating",
+            "dollar_odds",
+            "trainer_win_pct",
+            "start_position",
+            "official_final_position",
+            "speed_rating",
+            "race_speed_vs_par",
+            "horse_speed_vs_par",
+            "speed_rating_vs_field_avg",
+            "speed_rating_vs_winner",
+        ]
+
         for i in range(4):
+            original_cols = working_df.columns
+
             working_df = working_df.join(
-                source_df.select(
-                    [
-                        "race_date",
-                        "track_code",
-                        "race_number",
-                        "horse_name",
-                        "course_surface",
-                        "distance_furlongs",
-                        "class_rating",
-                        "dollar_odds",
-                        "trainer_win_pct",
-                        "start_position",
-                        "official_final_position",
-                        "speed_rating",
-                        "race_speed_vs_par",
-                        "horse_speed_vs_par",
-                        "speed_rating_vs_field_avg",
-                        "speed_rating_vs_winner",
-                    ]
-                ),
+                source_df.select(source_df_select),
                 left_on=[
                     f"opp_{i+1}_last_pp_race_date",
                     f"opp_{i+1}_last_pp_track_code",
@@ -222,7 +224,14 @@ class FeatureProcessor:
                 suffix=f"_opp_{i+1}_recent_0",
             )
 
+            # Get the new cols added to the working_df by those not in original.
+            new_cols = [col for col in working_df.columns if col not in original_cols]
+
             # Rename cols with the appropriate prefix.
+            working_df = working_df.rename(
+                {col_name: f"{col_name}_opp_{i+1}_recent_0" for col_name in new_cols if col_name in source_df_select}
+            )
+
             working_df = working_df.rename(
                 {
                     col: f"opp_{i+1}_recent_0_{col.replace(f"_opp_{i+1}_recent_0", "")}"
@@ -457,6 +466,10 @@ class FeatureProcessor:
 
         # Process opponent columns.
         base_df = self._process_opponents(working_df=base_df, lookup_df=historical_df)
+
+        # Select the appropriate cols before generating null indicator cols.
+        predict_features = [item for item in self.train_features if item != "target"]
+        base_df = base_df.select(["race_date", "race_number", *predict_features])
 
         # Process indicator columns.
         base_df = self._handle_missing_values(working_df=base_df)
