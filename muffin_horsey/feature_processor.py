@@ -71,47 +71,50 @@ class FeatureProcessor:
         return working_df
 
     @staticmethod
-    def _process_lag_races(feature_df: pl.DataFrame, lookup_df: pl.DataFrame | None = None) -> pl.DataFrame:
+    def _process_lag_races(working_df: pl.DataFrame, lookup_df: pl.DataFrame | None = None) -> pl.DataFrame:
         # Use lookup_df if provided, otherwise use feature_df for self-join
-        source_df = lookup_df if lookup_df is not None else feature_df
+        source_df = lookup_df if lookup_df is not None else working_df
 
-        feature_df = feature_df.join(
-            source_df.select(
-                [
-                    "race_date",
-                    "race_number",
-                    "track_code",
-                    "horse_name",
-                    # Start of cols to add with suffix.
-                    "race_type",
-                    "distance_furlongs",
-                    "race_purse",
-                    "field_size",
-                    "course_surface",
-                    "class_rating",
-                    "track_conditions",
-                    "runup_distance",
-                    "rail_distance",
-                    "sealed",
-                    "rank_in_odds",
-                    "dollar_odds",
-                    "days_since_last_race",
-                    "trainer_win_pct",
-                    "start_position",
-                    "point_of_call_1_position",
-                    "point_of_call_1_lengths",
-                    "point_of_call_5_position",
-                    "point_of_call_5_lengths",
-                    "point_of_call_final_position",
-                    "point_of_call_final_lengths",
-                    "speed_rating",
-                    "race_speed_vs_par",
-                    "horse_speed_vs_par",
-                    "horse_time_vs_winner",
-                    "speed_rating_vs_field_avg",
-                    "speed_rating_vs_winner",
-                ]
-            ),
+        original_cols = working_df.columns
+
+        source_df_select = [
+            # Start of join cols.
+            "race_date",
+            "race_number",
+            "track_code",
+            "horse_name",
+            # Start of cols to add with suffix.
+            "race_type",
+            "distance_furlongs",
+            "race_purse",
+            "field_size",
+            "course_surface",
+            "class_rating",
+            "track_conditions",
+            "runup_distance",
+            "rail_distance",
+            "sealed",
+            "rank_in_odds",
+            "dollar_odds",
+            "days_since_last_race",
+            "trainer_win_pct",
+            "start_position",
+            "point_of_call_1_position",
+            "point_of_call_1_lengths",
+            "point_of_call_5_position",
+            "point_of_call_5_lengths",
+            "point_of_call_final_position",
+            "point_of_call_final_lengths",
+            "speed_rating",
+            "race_speed_vs_par",
+            "horse_speed_vs_par",
+            "horse_time_vs_winner",
+            "speed_rating_vs_field_avg",
+            "speed_rating_vs_winner",
+        ]
+
+        working_df = working_df.join(
+            source_df.select(source_df_select),
             left_on=["last_pp_race_date", "last_pp_track_code", "last_pp_race_number", "horse_name"],
             right_on=["race_date", "track_code", "race_number", "horse_name"],
             how="left",
@@ -121,14 +124,23 @@ class FeatureProcessor:
 
         # ===== Rename lag columns with approprate prefix. =====
 
-        feature_df = feature_df.rename(
-            {col: f"recent_0_{col.replace("_recent_0", "")}" for col in feature_df.columns if col.endswith("_recent_0")}
+        new_cols = [col for col in working_df.columns if col not in original_cols]
+
+        working_df = working_df.rename(
+            {col_name: f"{col_name}_recent_0" for col_name in new_cols if col_name in source_df_select}
         )
 
-        return feature_df
+        working_df = working_df.rename(
+            {col: f"recent_0_{col.replace("_recent_0", "")}" for col in working_df.columns if col.endswith("_recent_0")}
+        )
+
+        return working_df
 
     @staticmethod
-    def _process_opponents(base_df: pl.DataFrame) -> pl.DataFrame:
+    def _process_opponents(working_df: pl.DataFrame, lookup_df: pl.DataFrame | None = None) -> pl.DataFrame:
+        # Use lookup_df if provided, otherwise use working_df for self-join
+        source_df = lookup_df if lookup_df is not None else working_df
+
         # Generate the current race features for the top 4 opponent horses. (ranked by dollar_odds)
         opp_cols_to_add = [
             "horse_name",
@@ -142,15 +154,15 @@ class FeatureProcessor:
         ]
 
         race_data = (
-            base_df.group_by(["race_date", "track_code", "race_number"])
+            working_df.group_by(["race_date", "track_code", "race_number"])
             .agg([pl.col(col).sort_by("rank_in_odds").alias(f"all_{col}") for col in opp_cols_to_add])
             .sort(["race_date", "track_code", "race_number"])
         )
 
-        base_df = base_df.join(race_data, on=["race_date", "track_code", "race_number"])
+        working_df = working_df.join(race_data, on=["race_date", "track_code", "race_number"])
 
         # Create offset indices in order to get true opponents without current horse.
-        base_df = base_df.with_columns(
+        working_df = working_df.with_columns(
             pl.when(pl.col("rank_in_odds") == 1)
             .then(pl.lit([1, 2, 3, 4]))
             .when(pl.col("rank_in_odds") == 2)
@@ -166,8 +178,7 @@ class FeatureProcessor:
         # ===== Use the offset opponent indices to grab the appropriate values for each col. =====
 
         for col in opp_cols_to_add:
-
-            base_df = base_df.with_columns(
+            working_df = working_df.with_columns(
                 [
                     pl.col(f"all_{col}")
                     .list.get(pl.col("opponent_indices").list.get(idx), null_on_oob=True)
@@ -176,11 +187,11 @@ class FeatureProcessor:
                 ]
             )
 
-        # ===== Create opponent lags. =====
+        # ===== Create lag cols for the opponents. =====
 
         for i in range(4):
-            base_df = base_df.join(
-                base_df.select(
+            working_df = working_df.join(
+                source_df.select(
                     [
                         "race_date",
                         "track_code",
@@ -212,15 +223,15 @@ class FeatureProcessor:
             )
 
             # Rename cols with the appropriate prefix.
-            base_df = base_df.rename(
+            working_df = working_df.rename(
                 {
                     col: f"opp_{i+1}_recent_0_{col.replace(f"_opp_{i+1}_recent_0", "")}"
-                    for col in base_df.columns
+                    for col in working_df.columns
                     if col.endswith(f"_opp_{i+1}_recent_0")
                 }
             )
 
-        return base_df
+        return working_df
 
     def _build_features(self) -> bool:
         # ===== Set the base or working dataframe. =====
@@ -312,11 +323,11 @@ class FeatureProcessor:
 
         # ===== Create lag races for horses. =====
 
-        feature_df = self._process_lag_races(feature_df=feature_df)
+        feature_df = self._process_lag_races(working_df=feature_df)
 
         # ===== Process opponent horses. =====
 
-        feature_df = self._process_opponents(base_df=feature_df)
+        feature_df = self._process_opponents(working_df=feature_df)
 
         # ===== Generate target columns. =====
 
@@ -347,8 +358,8 @@ class FeatureProcessor:
 
         return True
 
-    def _handle_missing_values(self) -> bool:
-        base_df: pl.DataFrame = self.processed_df
+    def _handle_missing_values(self, working_df: pl.DataFrame | None = None) -> pl.DataFrame | None:
+        base_df: pl.DataFrame = working_df if working_df is not None else self.processed_df
 
         # Add indicator columns for cols susceptible to missing data.
         base_df = base_df.with_columns(
@@ -364,9 +375,12 @@ class FeatureProcessor:
         # Final sort for redundancy.
         base_df = base_df.sort(["race_date", "track_code", "race_number"])
 
-        self.processed_df = base_df
+        # Only update self.processed_df if we're working on the training data.
+        if working_df is None:
+            self.processed_df = base_df
+            return None
 
-        return True
+        return base_df
 
     def get_dataframe(self) -> DataFrameInfo:
         """This function serves as the orchestrator of various methods in order to output a train-ready dataframe."""
@@ -439,7 +453,18 @@ class FeatureProcessor:
         base_df = base_df.with_columns(pl.col("trainer_win_pct").fill_null(0))
 
         # Process lag races for the prediction df.
+        base_df = self._process_lag_races(working_df=base_df, lookup_df=historical_df)
 
-        base_df = self._process_lag_races(feature_df=base_df, lookup_df=historical_df)
+        # Process opponent columns.
+        base_df = self._process_opponents(working_df=base_df, lookup_df=historical_df)
+
+        # Process indicator columns.
+        base_df = self._handle_missing_values(working_df=base_df)
+
+        # Verify that the training df and the prediction df structure are identical.
+        train_df_cols = self.processed_df.columns
+        predict_df_cols = base_df.columns
+
+        _col_difference = [col for col in train_df_cols if col not in predict_df_cols]
 
         return base_df
