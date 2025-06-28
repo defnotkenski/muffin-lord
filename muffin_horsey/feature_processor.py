@@ -442,9 +442,7 @@ class FeatureProcessor:
         base_df = polars.from_dict({**predict_data["current_race"], **predict_data["current_horse"]})
 
         base_df = base_df.cast({col: dtype for col, dtype in COLUMN_TYPES.items() if col in base_df.columns})
-
-        base_df = base_df.with_columns(polars.col("last_pp_race_date").str.to_datetime())
-        base_df = base_df.cast({"race_date": pl.Datetime})
+        base_df = base_df.cast({"race_date": pl.Datetime, "last_pp_race_date": pl.Datetime})
 
         base_df = self._build_prediction_safe_features(working_df=base_df)
 
@@ -467,9 +465,11 @@ class FeatureProcessor:
         # Process opponent columns.
         base_df = self._process_opponents(working_df=base_df, lookup_df=historical_df)
 
+        # Create a target col since the transformer expects every col to be present for predictions.
+        base_df = base_df.with_columns(pl.lit(None).alias("target"))
+
         # Select the appropriate cols before generating null indicator cols.
-        predict_features = [item for item in self.train_features if item != "target"]
-        base_df = base_df.select(["race_date", "race_number", *predict_features])
+        base_df = base_df.select(["race_date", "race_number", *self.train_features])
 
         # Process indicator columns.
         base_df = self._handle_missing_values(working_df=base_df)

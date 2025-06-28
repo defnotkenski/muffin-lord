@@ -89,17 +89,16 @@ def merge_xml() -> polars.DataFrame:
     else:
         print(f"Found and using {PATH_TO_TEMP_CSV.name}.")
 
-        polars_df = polars.read_csv(PATH_TO_TEMP_CSV)
+        polars_df = polars.read_csv(PATH_TO_TEMP_CSV, infer_schema=False)
 
-        polars_df = polars_df.cast({col: polars.Utf8 for col in polars_df.columns})
         polars_df = polars_df.with_columns(polars.col("race_date").str.to_datetime())
+        polars_df = polars_df.with_columns(polars.col("last_pp_race_date").str.to_datetime())
 
     # Cleanup outlier values.
     polars_df = cleanup_dataframe(base_polars_df=polars_df)
 
     # Cast columns to appropriate dtypes.
     polars_df = polars_df.cast(COLUMN_TYPES)
-    polars_df = polars_df.with_columns(polars.col("last_pp_race_date").str.to_datetime())
 
     # Apply appropriate sorting before sending it off.
     polars_df = polars_df.sort(["race_date", "track_code", "race_number", "dollar_odds"])

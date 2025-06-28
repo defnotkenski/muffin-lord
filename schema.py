@@ -12,6 +12,7 @@ enabling efficient batch casting of 70+ columns during DataFrame creation or tra
 import polars as pl
 
 COLUMN_TYPES = {
+    # "race_date": pl.Utf8, # Will be manually casted to datetime.
     "track_code": pl.Utf8,
     "track_name": pl.Utf8,
     "race_type": pl.Utf8,
@@ -49,7 +50,7 @@ COLUMN_TYPES = {
     "sex_desc": pl.Utf8,
     "last_pp_track_code": pl.Utf8,
     "last_pp_track_name": pl.Utf8,
-    "last_pp_race_date": pl.Utf8,
+    # "last_pp_race_date": pl.Utf8, # Will be manually casted to datetime.
     "last_pp_race_number": pl.Int64,
     "last_pp_race_finish": pl.Int64,
     "meds": pl.Utf8,
