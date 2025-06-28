@@ -1,0 +1,5 @@
+race_date,track_code,race_number,race_type,distance,distance_unit,race_purse,course_surface,track_conditions,horse_name,trainer_first_name,trainer_last_name,dollar_odds,last_pp_race_date,last_pp_track_code,last_pp_race_number
+2025-06-28,COCK,8,Claiming,600,F,90000,Dirt,FT,Really Thirsty,Pietro,Moran,0.23,2025-06-26,WO,5
+2025-06-28,COCK,8,Claiming,600,F,90000,Dirt,FT,Mor Crafty,Joam,Toledo,0.54,2025-06-26,TDN,8
+2025-06-28,COCK,8,Claiming,600,F,90000,Dirt,FT,Peace Out,Vladimir,Diaz,0.31,2025-06-25,PEN,2
+2025-06-28,COCK,8,Claiming,600,F,90000,Dirt,FT,Sweet Espresso,Santo,Sanjur,0.28,2025-06-24,IND,6

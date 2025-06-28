@@ -114,4 +114,4 @@ if __name__ == "__main__":
     data_config = feature_processor.get_dataframe()
     predict_df = feature_processor.get_predict_dataframe()
 
-    # run_eval(dataset_config=data_config, live_player_request=None)
+    run_eval(dataset_config=data_config, live_player_request=predict_df)

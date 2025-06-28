@@ -5,7 +5,6 @@ from muffin_horsey.feature_generator import generate_train_features
 from typing import NamedTuple
 from sklearn.model_selection import train_test_split
 from pathlib import Path
-import yaml
 from schema import COLUMN_TYPES
 
 
@@ -434,15 +433,21 @@ class FeatureProcessor:
         )
 
     def get_predict_dataframe(self) -> pl.DataFrame:
-        path_to_predict_yaml = Path.cwd() / "predict.yaml"
+        # path_to_predict_yaml = Path.cwd() / "predict.yaml"
 
-        with open(path_to_predict_yaml, "r") as r_yaml:
-            predict_data = yaml.safe_load(r_yaml)
+        # with open(path_to_predict_yaml, "r") as r_yaml:
+        #     predict_data = yaml.safe_load(r_yaml)
 
-        base_df = polars.from_dict({**predict_data["current_race"], **predict_data["current_horse"]})
+        # base_df = polars.from_dict({**predict_data["current_race"], **predict_data["current_horse"]})
+
+        path_to_predict_csv = Path.cwd() / "predict.csv"
+        base_df = polars.read_csv(path_to_predict_csv, infer_schema=False)
 
         base_df = base_df.cast({col: dtype for col, dtype in COLUMN_TYPES.items() if col in base_df.columns})
-        base_df = base_df.cast({"race_date": pl.Datetime, "last_pp_race_date": pl.Datetime})
+
+        # base_df = base_df.cast({"race_date": pl.Datetime, "last_pp_race_date": pl.Datetime})
+        base_df = base_df.with_columns(pl.col("race_date").str.to_datetime())
+        base_df = base_df.with_columns(pl.col("last_pp_race_date").str.to_datetime())
 
         base_df = self._build_prediction_safe_features(working_df=base_df)
 
