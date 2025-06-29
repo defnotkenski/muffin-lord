@@ -465,7 +465,7 @@ class FeatureProcessor:
         base_df = self._process_opponents(working_df=base_df, lookup_df=historical_df)
 
         # Create a target col since the transformer expects every col to be present for predictions.
-        base_df = base_df.with_columns(pl.lit(None).alias("target"))
+        base_df = base_df.with_columns(pl.lit(0).alias("target"))
 
         # Select the appropriate cols before generating null indicator cols.
         base_df = base_df.select(["race_date", "race_number", *self.train_features])
