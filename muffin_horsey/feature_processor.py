@@ -465,7 +465,7 @@ class FeatureProcessor:
         base_df = self._process_opponents(working_df=base_df, lookup_df=historical_df)
 
         # Create a target col since the transformer expects every col to be present for predictions.
-        base_df = base_df.with_columns(pl.lit(0).alias("target"))
+        base_df = base_df.with_columns(pl.lit(0).cast(pl.Int64).alias("target"))
 
         # Select the appropriate cols before generating null indicator cols.
         base_df = base_df.select(["race_date", "race_number", *self.train_features])
@@ -474,9 +474,23 @@ class FeatureProcessor:
         base_df = self._handle_missing_values(working_df=base_df)
 
         # Verify that the training df and the prediction df structure are identical.
-        train_df_cols = self.processed_df.columns
-        predict_df_cols = base_df.columns
+        # train_df_cols = self.processed_df.columns
+        # predict_df_cols = base_df.columns
 
-        _col_difference = [col for col in train_df_cols if col not in predict_df_cols]
+        # _col_difference = [col for col in train_df_cols if col not in predict_df_cols]
+
+        schema_diffs: list | None = []
+
+        if base_df.schema != self.processed_df.schema:
+            train_schema = self.processed_df.schema
+            predict_schema = base_df.schema
+
+            for col, dtype in predict_schema.items():
+                if col not in train_schema:
+                    schema_diffs.append(f"Missing column: {col}")
+                elif predict_schema[col] != train_schema[col]:
+                    schema_diffs.append(f"Dtype mismatch {col}: {predict_schema[col]} vs {train_schema[col]}")
+
+            raise ValueError(f"Schema mismatch: {schema_diffs}")
 
         return base_df
