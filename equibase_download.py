@@ -3,7 +3,6 @@ import random
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 import re
-import os
 
 
 def login_to_website(url, username, password):
@@ -61,9 +60,9 @@ def login_to_website(url, username, password):
 
             # ===== Download charts for a specified date to designated dir. =====
 
-            base_download_url = "https://www.equibase.com/premium/eqpTMResultChartDownload.cfm?tid=82569855&seq=17"
+            base_download_url = "https://www.equibase.com/premium/eqpTMResultChartDownload.cfm?tid=82592279&seq=22"
 
-            chart_date = f"2025_06_26"
+            chart_date = f"2025_06_27"
             downloads_dir = Path.cwd() / "datasets" / chart_date[:7] / chart_date
 
             if downloads_dir.exists():

@@ -433,12 +433,6 @@ class FeatureProcessor:
         )
 
     def get_predict_dataframe(self) -> pl.DataFrame:
-        # path_to_predict_yaml = Path.cwd() / "predict.yaml"
-
-        # with open(path_to_predict_yaml, "r") as r_yaml:
-        #     predict_data = yaml.safe_load(r_yaml)
-
-        # base_df = polars.from_dict({**predict_data["current_race"], **predict_data["current_horse"]})
 
         path_to_predict_csv = Path.cwd() / "predict.csv"
         base_df = polars.read_csv(path_to_predict_csv, infer_schema=False)
