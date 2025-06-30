@@ -24,7 +24,7 @@ class FeatureProcessor:
         self.base_df: pl.DataFrame = df
 
         self.processed_df: pl.DataFrame | None = None
-        self.features_raw_df: pl.DataFrame | None = None
+        # self.features_raw_df: pl.DataFrame | None = None
 
         self.target_type: str = target_type
 
@@ -242,6 +242,40 @@ class FeatureProcessor:
 
         return working_df
 
+    def _handle_missing_values(self, working_df: pl.DataFrame | None = None) -> pl.DataFrame | None:
+        base_df: pl.DataFrame = working_df if working_df is not None else self.processed_df
+
+        # Add indicator columns for cols susceptible to missing data.
+        # base_df = base_df.with_columns(
+        #     pl.all().exclude(["race_date", "race_number", "target"]).is_null().cast(pl.Int64).name.suffix("_is_null")
+        # )
+
+        # base_df = base_df.with_columns(pl.all().is_null().cast(pl.Int64).name.suffix("_is_null"))
+
+        base_df = base_df.with_columns(
+            [pl.col(col).is_null().cast(pl.Int64).name.suffix("_is_null") for col in self.feature_set.features]
+        )
+
+        # Fill nulls with a sentinel value like -999. Do not go bigger in order to prevent gradient issues.
+        # base_df = base_df.with_columns(pl.col(pl.selectors.NUMERIC_DTYPES).fill_null(-999))
+
+        base_df = base_df.with_columns(
+            [pl.col(col).fill_null(-999) for col in self.feature_set.features if base_df.schema[col].is_numeric()]
+        )
+
+        # After making changes.
+        _null_count_after = base_df.null_count()
+
+        # Final sort for redundancy.
+        base_df = base_df.sort(["race_date", "track_code", "race_number"])
+
+        # Only update self.processed_df if we're working on the training data.
+        if working_df is None:
+            self.processed_df = base_df
+            return None
+
+        return base_df
+
     def _build_features(self) -> bool:
         # ===== Set the base or working dataframe. =====
 
@@ -338,81 +372,45 @@ class FeatureProcessor:
 
         feature_df = self._process_opponents(working_df=feature_df)
 
-        # ===== Generate target columns. =====
+        # ===== Generate null indicator columns. =====
 
-        if self.target_type == "win":
-            feature_df = feature_df.with_columns(
-                (pl.col("official_final_position") == 1).cast(pl.Int64).alias("target")
-            )
-        elif self.target_type == "show":
-            feature_df = feature_df.with_columns(
-                (pl.col("official_final_position") <= 2).cast(pl.Int64).alias("target")
-            )
-        else:
-            feature_df = feature_df.with_columns(
-                (pl.col("official_final_position") <= 3).cast(pl.Int64).alias("target")
-            )
+        feature_df = self._handle_missing_values(working_df=feature_df)
 
         # ===== Final sort for redundancy. =====
 
         feature_df = feature_df.sort(["race_date", "track_code", "race_number"])
 
         # ===== Set the raw features df to be used as a helper df when making predictions downstream. =====
-        self.features_raw_df = feature_df
 
-        # ===== Select only training columns + some helper columns for downstream logic. =====
-
-        feature_df = feature_df.select(
-            ["race_date", "race_number", *self.feature_set.features, *self.feature_set.target]
-        )
         self.processed_df = feature_df
 
         return True
 
-    def _handle_missing_values(self, working_df: pl.DataFrame | None = None) -> pl.DataFrame | None:
-        base_df: pl.DataFrame = working_df if working_df is not None else self.processed_df
-
-        # Add indicator columns for cols susceptible to missing data.
-        # base_df = base_df.with_columns(
-        #     pl.all().exclude(["race_date", "race_number", "target"]).is_null().cast(pl.Int64).name.suffix("_is_null")
-        # )
-
-        base_df = base_df.with_columns(pl.all().is_null().cast(pl.Int64).name.suffix("_is_null"))
-
-        # Fill nulls with a sentinel value like -999. Do not go bigger in order to prevent gradient issues.
-        base_df = base_df.with_columns(pl.col(pl.selectors.NUMERIC_DTYPES).fill_null(-999))
-
-        # After making changes.
-        _null_count_after = base_df.null_count()
-
-        # Final sort for redundancy.
-        base_df = base_df.sort(["race_date", "track_code", "race_number"])
-
-        # Only update self.processed_df if we're working on the training data.
-        if working_df is None:
-            self.processed_df = base_df
-            return None
-
-        return base_df
-
     def get_dataframe(self) -> DataFrameInfo:
         """This function serves as the orchestrator of various methods in order to output a train-ready dataframe."""
 
-        # Extract features from data.
+        # ===== Extract features from data. =====
+
         self._build_features()
 
-        # Clean up data to prepare for transformer. Requires pre-selected columns, do not give it the full columns.
-        self._handle_missing_values()
+        # ===== Generate target columns. =====
 
-        # No more mutations of self.processed_df beyond this point.
         working_df = self.processed_df
 
-        # Organize into categorical, continuous, and target cols for model.
-        # continuous_cols = working_df.select(
-        #     pl.selectors.numeric().exclude(["race_date", "race_number", "target"])
-        # ).columns
-        # string_cols = working_df.select(pl.selectors.string()).columns
-        # target_cols = ["target"]
+        if self.target_type == "win":
+            working_df = working_df.with_columns(
+                (pl.col("official_final_position") == 1).cast(pl.Int64).alias("target")
+            )
+        elif self.target_type == "show":
+            working_df = working_df.with_columns(
+                (pl.col("official_final_position") <= 2).cast(pl.Int64).alias("target")
+            )
+        else:
+            working_df = working_df.with_columns(
+                (pl.col("official_final_position") <= 3).cast(pl.Int64).alias("target")
+            )
+
+        # ===== Organize into categorical, continuous, and target cols for model. =====
 
         train_features_plus = self.feature_set.features.copy()
         train_features_plus.extend([item + "_is_null" for item in train_features_plus])
@@ -461,12 +459,12 @@ class FeatureProcessor:
         base_df = base_df.with_columns(pl.col("race_date").str.to_datetime())
         base_df = base_df.with_columns(pl.col("last_pp_race_date").str.to_datetime())
 
-        # ===== Column creations. =====
+        # ===== Build features to align with what model expects. =====
 
         base_df = self._build_prediction_safe_features(working_df=base_df)
 
         # Add trainer_win_pct column.
-        historical_df = self.features_raw_df
+        historical_df = self.processed_df
 
         trainer_stats = (
             historical_df.filter(pl.col("race_date") < base_df["race_date"][0])
@@ -483,25 +481,15 @@ class FeatureProcessor:
         # Process opponent columns.
         base_df = self._process_opponents(working_df=base_df, lookup_df=historical_df)
 
-        # Create a target col since the transformer expects every col to be present for predictions.
-        base_df = base_df.with_columns(pl.lit(0).cast(pl.Int64).alias("target"))
-
-        # Select the appropriate cols before generating null indicator cols.
-        base_df = base_df.select(
-            [
-                "race_date",
-                "race_number",
-                "program_number",
-                "horse_name",
-                *self.feature_set.features,
-                *self.feature_set.target,
-            ]
-        )
-
         # Process indicator columns.
         base_df = self._handle_missing_values(working_df=base_df)
 
-        # Verify that the training df and the prediction df structure are identical.
+        # ===== Create a target col since the transformer expects every col to be present for predictions. =====
+
+        base_df_with_target = base_df.with_columns(pl.lit(0).cast(pl.Int64).alias("target"))
+
+        # ===== Verify that the training df and the prediction df structure are identical. =====
+
         schema_diffs: list | None = []
 
         if base_df.schema != self.processed_df.schema:
@@ -514,6 +502,6 @@ class FeatureProcessor:
                 elif predict_schema[col] != train_schema[col]:
                     schema_diffs.append(f"Dtype mismatch {col}: {predict_schema[col]} vs {train_schema[col]}")
 
-            # raise ValueError(f"Schema mismatch: {schema_diffs}")
+            raise ValueError(f"Schema mismatch: {schema_diffs}")
 
-        return base_df
+        return base_df_with_target
