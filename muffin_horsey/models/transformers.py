@@ -121,7 +121,7 @@ def train_model(
 
         if live_player_df is not None:
             print("Inferencing live player...")
-            predict_df = tabular_model.predict(live_player_df, include_input_features=False)
+            predict_df = tabular_model.predict(live_player_df, include_input_features=True)
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -195,7 +195,7 @@ def run_eval(dataset_config: DataFrameInfo, live_player_request: pl.DataFrame | 
 
     print(f"\n===== Live data predictions. =====\n")
     if live_predictions_df is not None:
-        print(live_predictions_df)
+        print(live_predictions_df.select(["program_number", "horse_name", "target_prediction"]))
     else:
         print("No live data provided for prediction.")
 

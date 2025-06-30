@@ -1,8 +1,8 @@
-race_date,track_code,race_number,race_type,distance,distance_unit,race_purse,course_surface,track_conditions,horse_name,trainer_first_name,trainer_last_name,dollar_odds,last_pp_race_date,last_pp_track_code,last_pp_race_number
-2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,Haberdashery,Kevin,McKathan,9.60,2025-06-15,GP,1
-2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,Lead Off,Guillermo,Morales Jr,48.10,2025-06-15,GP,7
-2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,Cross Haste,Pedro,Garcia Jr,3.20,2025-06-07,GP,10
-2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,Speedy Hans,Pablo,Torres,5.50,2025-06-15,GP,7
-2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,Golden Skull,Angel,Quiroz,4.30,2025-06-15,GP,7
-2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,Holy Stick,Amador,Sanchez,14.50,2025-01-25,HCH,-999
-2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,Mayheminthepalace,Amador,Sanchez,1.20,2025-06-07,GP,10
+race_date,track_code,race_number,race_type,distance,distance_unit,race_purse,course_surface,track_conditions,program_number,horse_name,trainer_first_name,trainer_last_name,dollar_odds,last_pp_race_date,last_pp_track_code,last_pp_race_number
+2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,1,Haberdashery,Kevin,McKathan,9.60,2025-06-15,GP,1
+2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,2,Lead Off,Guillermo,Morales Jr,48.10,2025-06-15,GP,7
+2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,3,Cross Haste,Pedro,Garcia Jr,3.20,2025-06-07,GP,10
+2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,4,Speedy Hans,Pablo,Torres,5.50,2025-06-15,GP,7
+2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,5,Golden Skull,Angel,Quiroz,4.30,2025-06-15,GP,7
+2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,6,Holy Stick,Amador,Sanchez,14.50,2025-01-25,HCH,-999
+2025-06-28,GP,3,Claiming,600,F,23500,Dirt,FT,7,Mayheminthepalace,Amador,Sanchez,1.20,2025-06-07,GP,10

@@ -1,8 +1,15 @@
 import yaml
 from pathlib import Path
+from dataclasses import dataclass
 
 
-def generate_train_features(lag_count: int, other_count: int) -> list[str]:
+@dataclass(frozen=True)
+class FeatureSet:
+    features: list[str]
+    target: list[str]
+
+
+def generate_train_features(lag_count: int, other_count: int) -> FeatureSet:
     yaml_path = Path.cwd() / "muffin_horsey" / "sample_training.yaml"
     # yaml_path = Path.cwd() / "sample_training.yaml"
 
@@ -45,10 +52,10 @@ def generate_train_features(lag_count: int, other_count: int) -> list[str]:
         *master_current_horse_lags,
         *master_other_horse,
         *master_other_horse_lags,
-        f"target",
+        # f"target",
     ]
 
-    return master_features
+    return FeatureSet(features=master_features, target=["target"])
 
 
 if __name__ == "__main__":

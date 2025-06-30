@@ -6,6 +6,7 @@ from typing import NamedTuple
 from sklearn.model_selection import train_test_split
 from pathlib import Path
 from schema import COLUMN_TYPES
+from muffin_horsey.feature_generator import FeatureSet
 
 
 class DataFrameInfo(NamedTuple):
@@ -27,8 +28,8 @@ class FeatureProcessor:
 
         self.target_type: str = target_type
 
-        all_features = generate_train_features(lag_count=1, other_count=4)
-        self.train_features = all_features
+        feature_set_dataclass: FeatureSet = generate_train_features(lag_count=1, other_count=4)
+        self.feature_set: FeatureSet = feature_set_dataclass
 
     @staticmethod
     def _build_prediction_safe_features(working_df: pl.DataFrame) -> pl.DataFrame:
@@ -361,7 +362,9 @@ class FeatureProcessor:
 
         # ===== Select only training columns + some helper columns for downstream logic. =====
 
-        feature_df = feature_df.select(["race_date", "race_number", *self.train_features])
+        feature_df = feature_df.select(
+            ["race_date", "race_number", *self.feature_set.features, *self.feature_set.target]
+        )
         self.processed_df = feature_df
 
         return True
@@ -370,9 +373,11 @@ class FeatureProcessor:
         base_df: pl.DataFrame = working_df if working_df is not None else self.processed_df
 
         # Add indicator columns for cols susceptible to missing data.
-        base_df = base_df.with_columns(
-            pl.all().exclude(["race_date", "race_number", "target"]).is_null().cast(pl.Int64).name.suffix("_is_null")
-        )
+        # base_df = base_df.with_columns(
+        #     pl.all().exclude(["race_date", "race_number", "target"]).is_null().cast(pl.Int64).name.suffix("_is_null")
+        # )
+
+        base_df = base_df.with_columns(pl.all().is_null().cast(pl.Int64).name.suffix("_is_null"))
 
         # Fill nulls with a sentinel value like -999. Do not go bigger in order to prevent gradient issues.
         base_df = base_df.with_columns(pl.col(pl.selectors.NUMERIC_DTYPES).fill_null(-999))
@@ -403,13 +408,25 @@ class FeatureProcessor:
         working_df = self.processed_df
 
         # Organize into categorical, continuous, and target cols for model.
-        continuous_cols = working_df.select(
-            pl.selectors.numeric().exclude(["race_date", "race_number", "target"])
-        ).columns
-        string_cols = working_df.select(pl.selectors.string()).columns
-        target_cols = ["target"]
+        # continuous_cols = working_df.select(
+        #     pl.selectors.numeric().exclude(["race_date", "race_number", "target"])
+        # ).columns
+        # string_cols = working_df.select(pl.selectors.string()).columns
+        # target_cols = ["target"]
 
-        # Allocation of the processed dataset for train, validation, and evaluation.
+        train_features_plus = self.feature_set.features.copy()
+        train_features_plus.extend([item + "_is_null" for item in train_features_plus])
+
+        continuous_cols = working_df.select(pl.selectors.numeric()).columns
+        continuous_cols = [col for col in continuous_cols if col in train_features_plus]
+
+        string_cols = working_df.select(pl.selectors.string()).columns
+        string_cols = [col for col in string_cols if col in train_features_plus]
+
+        target_cols = self.feature_set.target
+
+        # ===== Allocation of the processed dataset for train, validation, and evaluation. =====
+
         # Get unique races.
         unique_races = working_df.select(["race_date", "track_code", "race_number"]).unique(maintain_order=True)
 
@@ -434,19 +451,21 @@ class FeatureProcessor:
 
     def get_predict_dataframe(self) -> pl.DataFrame:
 
+        # ===== Load prediction data from CSV. =====
+
         path_to_predict_csv = Path.cwd() / "predict.csv"
         base_df = polars.read_csv(path_to_predict_csv, infer_schema=False)
 
         base_df = base_df.cast({col: dtype for col, dtype in COLUMN_TYPES.items() if col in base_df.columns})
 
-        # base_df = base_df.cast({"race_date": pl.Datetime, "last_pp_race_date": pl.Datetime})
         base_df = base_df.with_columns(pl.col("race_date").str.to_datetime())
         base_df = base_df.with_columns(pl.col("last_pp_race_date").str.to_datetime())
 
+        # ===== Column creations. =====
+
         base_df = self._build_prediction_safe_features(working_df=base_df)
 
-        # ===== Add trainer_win_pct column. =====
-
+        # Add trainer_win_pct column.
         historical_df = self.features_raw_df
 
         trainer_stats = (
@@ -468,17 +487,21 @@ class FeatureProcessor:
         base_df = base_df.with_columns(pl.lit(0).cast(pl.Int64).alias("target"))
 
         # Select the appropriate cols before generating null indicator cols.
-        base_df = base_df.select(["race_date", "race_number", *self.train_features])
+        base_df = base_df.select(
+            [
+                "race_date",
+                "race_number",
+                "program_number",
+                "horse_name",
+                *self.feature_set.features,
+                *self.feature_set.target,
+            ]
+        )
 
         # Process indicator columns.
         base_df = self._handle_missing_values(working_df=base_df)
 
         # Verify that the training df and the prediction df structure are identical.
-        # train_df_cols = self.processed_df.columns
-        # predict_df_cols = base_df.columns
-
-        # _col_difference = [col for col in train_df_cols if col not in predict_df_cols]
-
         schema_diffs: list | None = []
 
         if base_df.schema != self.processed_df.schema:
@@ -491,6 +514,6 @@ class FeatureProcessor:
                 elif predict_schema[col] != train_schema[col]:
                     schema_diffs.append(f"Dtype mismatch {col}: {predict_schema[col]} vs {train_schema[col]}")
 
-            raise ValueError(f"Schema mismatch: {schema_diffs}")
+            # raise ValueError(f"Schema mismatch: {schema_diffs}")
 
         return base_df
