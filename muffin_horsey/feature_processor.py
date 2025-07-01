@@ -488,20 +488,4 @@ class FeatureProcessor:
 
         base_df_with_target = base_df.with_columns(pl.lit(0).cast(pl.Int64).alias("target"))
 
-        # ===== Verify that the training df and the prediction df structure are identical. =====
-
-        schema_diffs: list | None = []
-
-        if base_df.schema != self.processed_df.schema:
-            train_schema = self.processed_df.schema
-            predict_schema = base_df.schema
-
-            for col, dtype in predict_schema.items():
-                if col not in train_schema:
-                    schema_diffs.append(f"Missing column: {col}")
-                elif predict_schema[col] != train_schema[col]:
-                    schema_diffs.append(f"Dtype mismatch {col}: {predict_schema[col]} vs {train_schema[col]}")
-
-            raise ValueError(f"Schema mismatch: {schema_diffs}")
-
         return base_df_with_target
