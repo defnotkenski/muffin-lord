@@ -1,3 +1,4 @@
+from typing import Literal
 from pytorch_tabular.config import DataConfig, OptimizerConfig, TrainerConfig
 from pytorch_tabular.models import FTTransformerConfig, NodeConfig, GANDALFConfig
 from muffin_horsey.feature_processor import DataFrameInfo
@@ -12,6 +13,11 @@ from pathlib import Path
 import petname
 from sklearn.dummy import DummyClassifier
 import torch
+from muffin_horsey.models.race_aware_config import HorseRaceFTTransformerConfig
+from muffin_horsey.models.race_aware_transformer import HorseRaceAwareModel
+from muffin_horsey.models.race_aware_config import HorseRaceFTTransformerConfig
+from muffin_horsey.models.race_aware_transformer import HorseRaceAwareModel
+from muffin_horsey.models.race_aware_datamodule import RaceAwareDatamodule
 
 
 def train_model(
@@ -19,6 +25,7 @@ def train_model(
     train_set: pandas.DataFrame,
     validation_set: pandas.DataFrame,
     eval_set: pandas.DataFrame,
+    model_type: Literal["normal", "custom"],
     live_player_df: pandas.DataFrame | None = None,
 ) -> tuple[pandas.DataFrame, pandas.DataFrame | None]:
 
@@ -65,6 +72,20 @@ def train_model(
 
     task = "classification"
 
+    model_config_race_aware = HorseRaceFTTransformerConfig(
+        task=task,
+        max_horses_per_race=16,
+        feature_embed_dim=64,
+        feature_num_heads=8,
+        feature_num_blocks=3,
+        horse_embed_dim=128,
+        horse_num_heads=8,
+        horse_num_blocks=4,
+        ff_dropout=0.15,
+        attn_dropout=0.1,
+        attn_feature_importance=True,
+    )
+
     model_config_ft = FTTransformerConfig(
         task=task,
         input_embed_dim=128,  # Increased from 64.
@@ -88,12 +109,31 @@ def train_model(
         model_configs=[model_config_ft, model_config_gandalf, model_config_node],
     )
 
-    tabular_model = TabularModel(
-        data_config=data_config,
-        model_config=stacking_model,
-        trainer_config=trainer_config,
-        optimizer_config=optimizer_config,
-    )
+    # tabular_model = TabularModel(
+    #     data_config=data_config,
+    #     model_config=stacking_model,
+    #     trainer_config=trainer_config,
+    #     optimizer_config=optimizer_config,
+    # )
+
+    if model_type == "custom":
+        tabular_model = TabularModel(
+            data_config=data_config,
+            model_config=model_config_race_aware,
+            trainer_config=trainer_config,
+            optimizer_config=optimizer_config,
+            model_callable=HorseRaceAwareModel,
+        )
+
+        tabular_model._datamodule_cls = RaceAwareDatamodule
+    else:
+        # Default to stacking model
+        tabular_model = TabularModel(
+            data_config=data_config,
+            model_config=stacking_model,
+            trainer_config=trainer_config,
+            optimizer_config=optimizer_config,
+        )
 
     # ===== Train the model. =====
 
@@ -144,6 +184,7 @@ def run_eval(dataset_config: DataFrameInfo, live_player_request: pl.DataFrame | 
         validation_set=validation_set_pandas,
         eval_set=eval_set_pandas,
         live_player_df=live_player_request_pandas,
+        model_type="custom",
     )
 
     # ===== Polars conversion. =====
